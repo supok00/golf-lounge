@@ -219,3 +219,6 @@ code { background: #f1f4fa; padding: 1px 6px; border-radius: 6px; font-size: 13p
 /* 새 버전 알림 */
 .updbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0)); z-index: 60; display: flex; align-items: center; gap: 12px; background: #fff; color: var(--ink); padding: 10px 12px 10px 16px; border-radius: 14px; border: 1px solid #cfe1fb; box-shadow: 0 8px 24px rgba(80,100,150,.18); font-size: 14px; font-weight: 700; max-width: 94vw; }
 .updbar .btn { min-height: 36px; padding: 0 14px; }
+
+/* 버전 */
+.status .ver { color: var(--lav-d); background: var(--lav); padding: 1px 8px; border-radius: 999px; text-decoration: none; font-weight: 800; }
