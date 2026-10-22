@@ -1,5 +1,5 @@
 /* 골프 라운드 분석 웹앱 — 화면 렌더링.
- * 데이터 원본은 GitHub 저장소의 data/rounds.json, data/settings.json 이다(GitHubStore).
+ * 데이터 원본은 GitHub 저장소의 rounds.json, settings.json 이다(위치는 GitHubStore가 정한다 — 원래 주인은 data/, Fork한 사람은 data/users/계정/).
  * 입력 중인 라운드만 이 브라우저에 임시 저장해, 저장 전에 화면이 닫혀도 잃지 않게 한다.
  */
 (() => {
@@ -77,7 +77,7 @@
         loadedAt = new Date();
         ls.set(KEY_CACHE, rounds);
       }
-      const s = await G.load("data/settings.json");
+      const s = await G.load(G.SETTINGS);
       if (s.data) settings = deepMerge(structuredClone(S.DEFAULT_SETTINGS), s.data);
       if (!quiet) toast(source === "github" ? "GitHub 최신 데이터를 불러왔습니다." : "배포본 데이터를 불러왔습니다(GitHub API 한도 초과 등).");
     } catch (e) {
@@ -188,6 +188,27 @@
   const valCell = (v, t, ok, strong) => `<td class="${ok === null ? "" : ok ? "ok" : "ng"}">${strong ? "<b>" : ""}${fmtT(v, t.fmt)}${strong ? "</b>" : ""}</td>`;
   const goalText = (t) => `${fmtT(t.v, t.fmt)} ${t.low ? "이하" : "이상"}`;
 
+  // Fork한 사이트는 자기 폴더(data/users/계정)에 저장해 빈 기록으로 시작한다. 처음 쓰는 분께 순서를 안내한다.
+  function welcomeBox() {
+    if (G.IS_ORIGIN || rounds.length) return "";
+    return `<div class="card welcome">
+      <h3 class="mt0">👋 내 골프 라운지에 오신 것을 환영합니다</h3>
+      <p>아직 기록이 없습니다. 이 사이트의 기록은 <b>${esc(G.PRIMARY.owner)}/${esc(G.PRIMARY.repo)}</b> 저장소의 <code>${esc(G.ROUNDS)}</code>에 저장됩니다.</p>
+      <ol>
+        <li>${G.canWrite() ? "✅ GitHub 토큰 준비 완료" : `<a href="#/settings">설정</a>에서 <b>내 저장소용 GitHub 토큰</b>을 넣어 주세요`}</li>
+        <li><a href="#/import">붙여넣기 등록</a>(스마트스코어) 또는 <a href="#/input">라운드 입력</a>으로 첫 라운드를 남겨 보세요.</li>
+        <li>자세한 방법은 <a href="#/guide">📖 가이드</a>에 있습니다.</li>
+      </ol>
+    </div>`;
+  }
+  async function claimSite(fresh) {
+    if (fresh) await commit(() => [], "새 사용자: 빈 기록으로 시작");
+    const next = fresh ? structuredClone(S.DEFAULT_SETTINGS) : settings;
+    await G.update(() => next, fresh ? "새 사용자: 기본 기준값" : "새 사용자: 기존 기록 그대로 사용", G.SETTINGS);
+    settings = next;
+    toast(fresh ? "빈 기록으로 시작합니다. 라운드 입력이나 붙여넣기 등록으로 첫 기록을 남겨 보세요." : "지금 기록 그대로 씁니다.", 4000);
+    route();
+  }
   function dashboard() {
     const fr = frounds();
     const A = S.analyze(fr, settings);
@@ -202,6 +223,7 @@
     const ps = [3, 4, 5].filter((p) => isNum(H.byPar[p].over)).sort((a, b) => H.byPar[a].over - H.byPar[b].over);
     const frA = S.avg(A.fulls.map((r) => r.front)), bk = S.avg(A.fulls.map((r) => r.back));
     app.innerHTML = `
+      ${welcomeBox()}
       ${head("dashboard")}
       <h2>요약</h2>
       <div class="kpis">
@@ -763,7 +785,14 @@
   }
 
   // ───────────── 사용자 가이드 ─────────────
-  const GUIDE = { app: "My Golf Lounge", url: "supok00.github.io/golf-lounge", features: { filter: true, import: true, insights: true }, repos: ["golf-lounge", "mygolf", "golf-round-web"] };
+  const GUIDE = {
+    app: "My Golf Lounge",
+    url: `${G.PRIMARY.owner}.github.io/${G.PRIMARY.repo}`,
+    features: { filter: true, import: true, insights: true, fork: true },
+    repos: [G.PRIMARY.repo, ...G.MIRRORS.map((m) => m.repo)],
+    origin: `${G.ORIGIN.owner}/${G.ORIGIN.repo}`,
+    isOrigin: G.IS_ORIGIN,
+  };
   function guideView() {
     app.innerHTML = Guide.render(GUIDE);
     Guide.bind(app);
@@ -798,7 +827,7 @@
         </div>
       </div>
 
-      <h2>동기화</h2>
+      ${G.MIRRORS.length ? `<h2>동기화</h2>
       <div class="card">
         <div id="syncBox" class="muted">확인 중…</div>
         <div class="row" style="margin-top:10px">
@@ -806,7 +835,7 @@
           ${[G.PRIMARY, ...G.MIRRORS].map((r) => `<button class="btn ghost" data-sync="${esc(r.repo)}" type="button" ${G.canWrite() ? "" : "disabled"}>${esc(r.repo)} 기준으로 맞추기</button>`).join("")}
         </div>
         <p class="legend-note">평소에는 저장할 때마다 자동으로 모든 저장소에 같이 반영됩니다. 네트워크 오류 등으로 어긋났을 때만 맞추기를 누르세요. 맞추기는 한쪽 내용으로 다른 쪽을 덮어씁니다.</p>
-      </div>
+      </div>` : ""}
 
       <h2>목표 기준값</h2>
       <div class="tbl-wrap"><table><thead><tr><th class="l">지표</th><th>목표</th><th>방향</th></tr></thead>
@@ -820,7 +849,13 @@
 
       <h2>백업</h2>
       ${native ? `<p class="muted">앱에서는 파일 내려받기가 안 됩니다. 백업은 웹 페이지에서 하거나 GitHub 저장소의 data/rounds.json을 쓰세요.</p>` : `<div class="row"><button class="btn ghost" id="bExport" type="button">rounds.json 내려받기</button></div>`}
-      <p class="muted">현재 ${rounds.length}라운드 · GitHub 저장소의 커밋 기록에 모든 변경 이력이 남습니다.</p>`;
+      <p class="muted">현재 ${rounds.length}라운드 · GitHub 저장소의 커밋 기록에 모든 변경 이력이 남습니다.</p>
+      ${G.IS_ORIGIN ? "" : `<h2>데이터 초기화</h2>
+      <div class="card">
+        <p class="mt0">내 저장소(${esc(G.PRIMARY.owner)}/${esc(G.PRIMARY.repo)})의 라운드를 모두 지우고 기준값을 기본값으로 되돌립니다. 지운 기록도 GitHub 커밋 기록에서 되살릴 수 있습니다.</p>
+        <button class="btn danger" id="bWipe" type="button" ${G.canWrite() ? "" : "disabled"}>모든 기록 지우고 새로 시작</button>
+        <div id="wipeBox" style="margin-top:8px"></div>
+      </div>`}`;
     const $ = (s) => document.getElementById(s);
     if ($("bInstall")) $("bInstall").onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; settingsView(); };
     $("bTok").onclick = async () => {
@@ -841,11 +876,14 @@
         box.innerHTML = st.map((x) => `<div>${x.same ? `<span class="ok">● 일치</span>` : `<span class="ng">● 다름</span>`} ${esc(x.path)} ↔ ${esc(x.mirror)}${x.a !== null ? ` (${x.a} / ${x.b}라운드)` : ""}${x.error ? ` <span class="ng">${esc(x.error)}</span>` : ""}</div>`).join("");
       } catch (e) { box.textContent = "확인 실패: " + e.message; }
     };
-    syncCheck();
-    $("bSyncCheck").onclick = syncCheck;
+    if ($("syncBox")) { syncCheck(); $("bSyncCheck").onclick = syncCheck; }
+    if ($("bWipe")) $("bWipe").onclick = () => {
+      $("wipeBox").innerHTML = `<div class="notice">정말 ${rounds.length}라운드를 모두 지울까요? <button class="btn danger" id="bWipe2" type="button">지우기 확인</button></div>`;
+      $("bWipe2").onclick = () => claimSite(true).catch((e) => toast(e.message, 6000));
+    };
     const doSync = async (from) => {
       try {
-        for (const p of ["data/rounds.json", "data/settings.json"]) await G.resync(from, p);
+        for (const p of [G.ROUNDS, G.SETTINGS]) await G.resync(from, p);
         toast("두 저장소를 맞췄습니다.");
         await loadAll(true);
         settingsView();
@@ -861,7 +899,7 @@
       const rt = Number($("rTarget").value);
       if (isNum(rt)) settings.radarTarget = rt;
       try {
-        const { mirrorErrors } = await G.update(() => settings, "기준값 변경", "data/settings.json");
+        const { mirrorErrors } = await G.update(() => settings, "기준값 변경", G.SETTINGS);
         if (mirrorErrors.length) throw new Error("기준값은 저장했지만 동기화 실패: " + mirrorErrors.join(" / "));
         toast("기준값을 GitHub에 저장했습니다.");
       } catch (e) { toast(e.message, 6000); }

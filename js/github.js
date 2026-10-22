@@ -7,16 +7,33 @@
  */
 const GitHubStore = (() => {
   // ── 이 웹의 저장소 설정 ──
+  // 페이지 주소(계정.github.io/저장소)에서 저장소를 알아낸다. 그래서 다른 사람이 Fork해도 코드 수정 없이
+  // 자기 저장소에 저장된다. 원래 주인(ORIGIN_OWNER)일 때만 다른 두 웹과 동기화한다.
   const APP_KEY = "lounge";
-  const PRIMARY = { owner: "supok00", repo: "golf-lounge", branch: "main" };
-  const MIRRORS = [{ owner: "supok00", repo: "mygolf", branch: "main" }, { owner: "supok00", repo: "golf-round-web", branch: "main" }];
-  const ROUNDS = "data/rounds.json";
+  const ORIGIN_OWNER = "supok00";
+  const ORIGIN = { owner: ORIGIN_OWNER, repo: "golf-lounge", branch: "main" };
+  const ORIGIN_MIRRORS = [{ owner: ORIGIN_OWNER, repo: "mygolf", branch: "main" }, { owner: ORIGIN_OWNER, repo: "golf-round-web", branch: "main" }];
+  function detect() {
+    const host = location.hostname.toLowerCase();
+    if (!host.endsWith(".github.io")) return ORIGIN;            // 로컬 개발 등은 원래 저장소
+    const owner = host.slice(0, -".github.io".length);
+    const seg = location.pathname.split("/").filter(Boolean)[0];
+    return { owner, repo: seg || host, branch: "main" };        // 계정.github.io 저장소 자체에 올린 경우
+  }
+  const PRIMARY = detect();
+  const IS_ORIGIN = PRIMARY.owner === ORIGIN_OWNER.toLowerCase() || PRIMARY.owner === ORIGIN_OWNER;
+  const MIRRORS = IS_ORIGIN ? ORIGIN_MIRRORS : [];
+  // Fork한 사람은 자기 계정 이름의 폴더에 저장한다. 원래 주인의 data/rounds.json과 파일이 달라
+  // 「Sync fork」로 새 기능을 받아도 기록이 섞이거나 충돌하지 않고, 처음에는 빈 기록으로 시작한다.
+  const DATA_DIR = IS_ORIGIN ? "data" : `data/users/${PRIMARY.owner}`;
+  const ROUNDS = `${DATA_DIR}/rounds.json`;
+  const SETTINGS = `${DATA_DIR}/settings.json`;
 
   const KEY_CFG = APP_KEY + ".github.v1";
   const KEY_PENDING = APP_KEY + ".syncPending.v1";
   // 같은 사이트(supok00.github.io)의 다른 골프 웹에 넣어 둔 토큰이 있으면 처음 한 번 가져온다
   try {
-    if (!localStorage.getItem(KEY_CFG)) {
+    if (!localStorage.getItem(KEY_CFG) && location.hostname.toLowerCase().startsWith(ORIGIN_OWNER.toLowerCase() + ".")) {
       for (const k of ["mygolf.github.v1", "golf.github.v1"]) {
         const t = (JSON.parse(localStorage.getItem(k)) || {}).token;
         if (t) { localStorage.setItem(KEY_CFG, JSON.stringify({ token: t })); break; }
@@ -127,7 +144,7 @@ const GitHubStore = (() => {
   // 동기화 상태: 두 저장소 파일이 같은지 비교
   async function syncStatus() {
     const out = [];
-    for (const path of [ROUNDS, "data/settings.json"]) {
+    for (const path of [ROUNDS, SETTINGS]) {
       const a = await readRepo(PRIMARY, path).catch((e) => ({ error: e.message }));
       for (const m of MIRRORS) {
         const b = await readRepo(m, path).catch((e) => ({ error: e.message }));
@@ -162,5 +179,5 @@ const GitHubStore = (() => {
     return { ok, msg: (ok ? "모든 저장소 저장 권한 확인됨" : "권한 확인 필요 — ") + " (" + results.join(", ") + ")" };
   }
 
-  return { cfg, setCfg, canWrite, load, update, syncStatus, resync, pending, testToken, PRIMARY, MIRRORS };
+  return { cfg, setCfg, canWrite, load, update, syncStatus, resync, pending, testToken, PRIMARY, MIRRORS, IS_ORIGIN, ORIGIN, ROUNDS, SETTINGS };
 })();

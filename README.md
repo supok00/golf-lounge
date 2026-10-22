@@ -12,3 +12,14 @@
 ## 데이터
 `data/rounds.json`을 golf-lounge · mygolf · golf-round-web 세 저장소에 두고, 저장할 때 같은 변경을 세 곳에 적용해 동기화합니다.
 저장에는 세 저장소 모두 Contents 읽기/쓰기 권한이 있는 fine-grained 토큰이 필요합니다.
+
+## 다른 사람이 쓰려면 (Fork)
+1. GitHub 계정으로 이 저장소를 **Fork**
+2. 내 복사본의 **Settings → Pages → main / (root)** 저장 → `https://내아이디.github.io/golf-lounge/`
+3. 내 복사본에만 권한이 있는 fine-grained 토큰(Contents: Read and write)을 만들어 사이트 설정에 입력
+
+- 페이지 주소에서 저장소를 알아내므로 코드를 고칠 필요가 없습니다.
+- Fork한 사람의 기록은 `data/users/아이디/`에 저장되고 빈 기록으로 시작합니다. 원래 주인의 `data/`는 쓰지 않습니다.
+- 원래 저장소의 새 기능은 **Sync fork → Update branch**로 받습니다. 기록 파일이 달라 충돌하지 않습니다.
+- 세 저장소 동기화(mygolf, golf-round-web)는 원래 주인(supok00) 사이트에서만 동작합니다.
+- 자세한 순서는 사이트의 📖 가이드 → 「처음 쓰는 분」에 있습니다.

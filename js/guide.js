@@ -9,6 +9,23 @@ const Guide = (() => {
     const repos = o.repos.map((r) => `<b>${r}</b>`).join(", ");
     const parts = [];
 
+    if (f.fork) parts.push(sec("fork", "0. 처음 쓰는 분 — 내 골프 라운지 만들기", `
+      <p>이 사이트를 다른 사람도 자기 기록용으로 쓸 수 있습니다. GitHub에 <b>내 복사본(Fork)</b>을 만들어 쓰는 방식이라 서로의 기록이 섞이지 않고, 비용도 들지 않습니다(약 10분).</p>
+      <ol>
+        <li><b>GitHub 가입</b>: <code>github.com</code>에서 무료 계정을 만듭니다. 아이디가 사이트 주소가 됩니다.</li>
+        <li><b>복사본 만들기</b>: <code>github.com/${o.origin}</code>을 열고 오른쪽 위 <b>Fork → Create fork</b>를 누릅니다(이름은 그대로 두는 것을 권장).</li>
+        <li><b>사이트 켜기</b>: 내 복사본 저장소의 <b>Settings → Pages</b>에서 Branch를 <b>main / (root)</b>로 고르고 Save. 1~2분 뒤 <code>https://내아이디.github.io/golf-lounge/</code>가 열립니다.</li>
+        <li><b>토큰 만들기</b>: Settings → Developer settings → Fine-grained tokens → Generate new token
+          <ul><li>Repository access: <b>Only select repositories → 내 golf-lounge</b></li><li>Permissions → <b>Contents: Read and write</b></li></ul></li>
+        <li><b>토큰 넣기</b>: 내 사이트의 <b>설정 → GitHub 연결</b>에 넣고 「연결 확인」.</li>
+        <li><b>첫 기록</b>: 붙여넣기 등록이나 라운드 입력으로 기록하면 끝입니다. 휴대폰 Chrome에서 「앱 설치」를 하면 앱처럼 쓸 수 있습니다.</li>
+      </ol>
+      <ul>
+        <li>내 기록은 내 저장소의 <code>data/users/내아이디/</code> 폴더에 저장되고, 처음에는 빈 기록으로 시작합니다. 원래 주인의 기록은 화면에 나오지 않습니다.</li>
+        <li><b>새 기능 받기</b>: 원래 사이트가 업데이트되면 내 저장소 화면의 <b>Sync fork → Update branch</b>를 누르세요. 기록 파일이 따로 있어서 내 기록은 그대로 남습니다.</li>
+        <li><b>공개 범위</b>: 무료 계정의 Pages는 공개 저장소에서 동작하므로 기록(날짜·골프장·스코어)을 누구나 볼 수 있습니다. 동반자 이름 같은 다른 사람의 개인정보는 적지 마세요.</li>
+      </ul>`));
+
     parts.push(sec("start", "1. 시작하기", `
       <h3>휴대폰에 앱으로 설치</h3>
       <ol>
@@ -29,8 +46,9 @@ const Guide = (() => {
         <li>만든 토큰을 <b>설정 → GitHub 연결</b>에 넣고 「토큰 저장」 → 「연결 확인」에서 모든 저장소가 「쓰기 가능」인지 봅니다.</li>
       </ol>
       <p class="muted">토큰은 그 브라우저에만 저장되고 GitHub 말고 다른 곳으로 보내지 않습니다. 공용 PC에는 넣지 마세요. 이미 만든 토큰에 저장소를 추가하려면 토큰의 Edit에서 Repository access에 추가하면 됩니다(토큰 값은 그대로).</p>
-      <h3>데이터 동기화</h3>
-      <p>라운드는 ${repos} 저장소의 <code>data/rounds.json</code>에 같이 저장됩니다. 어느 웹에서 저장해도 같은 변경이 모든 저장소에 적용되므로, 다른 웹·다른 기기에서도 <b>새로고침</b>하면 바로 보입니다.
+      <h3>${o.repos.length > 1 ? "데이터 동기화" : "데이터 저장 위치"}</h3>
+      ${o.repos.length > 1 ? "" : `<p>라운드는 ${repos} 저장소에 커밋으로 저장됩니다. 다른 기기에서도 <b>새로고침</b>하면 바로 보이고, 지난 기록은 저장소의 커밋 기록에 모두 남습니다.</p>`}
+      <p ${o.repos.length > 1 ? "" : 'hidden'}>라운드는 ${repos} 저장소의 <code>data/rounds.json</code>에 같이 저장됩니다. 어느 웹에서 저장해도 같은 변경이 모든 저장소에 적용되므로, 다른 웹·다른 기기에서도 <b>새로고침</b>하면 바로 보입니다.
       네트워크 오류로 한쪽만 저장되면 상태줄에 <b>⚠ 동기화 필요</b>가 뜹니다. <b>설정 → 동기화</b>에서 일치 여부를 보고 「○○ 기준으로 맞추기」를 누르세요.</p>`));
 
     parts.push(sec("input", "2. 라운드 등록하기", `
@@ -148,7 +166,7 @@ const Guide = (() => {
         <dt>10홀만 친 라운드는요?</dt><dd>등록은 되지만 평균·베스트 같은 18홀 통계에서는 빠집니다.</dd>
       </dl>`));
 
-    const toc = [["start", "시작하기"], ["input", "라운드 등록"], ["pages", "화면별 보는 법"], ["terms", "용어"], ["faq", "자주 묻는 질문"]];
+    const toc = [...(f.fork ? [["fork", "처음 쓰는 분"]] : []), ["start", "시작하기"], ["input", "라운드 등록"], ["pages", "화면별 보는 법"], ["terms", "용어"], ["faq", "자주 묻는 질문"]];
     return `<div class="guide">
       <h1 class="guide-title">📖 ${o.app} 사용자 가이드</h1>
       <div class="guide-toc">${toc.map(([id, t]) => `<a href="#/guide" data-goto="g-${id}">${t}</a>`).join("")}</div>
