@@ -1,7 +1,7 @@
 /* 골프 라운드 통계 계산 — 「골프 라운드 분석_v2.xlsx」의 수식과 같은 정의를 쓴다.
  * 홀 데이터(v2 홀별입력과 같은 항목):
  *   h 홀, par, dist 거리(m), hcp 핸디캡, score(+/-), fw FW 안착(1/0), miss 티샷 미스(L/R/H/S/-),
- *   drive 티샷 거리(m), ong 온그린 타수, gir GIR 직접(1/0), putts, fp 1st 퍼트 거리(m),
+ *   drive 티샷 거리(m), ong 온그린 타수, putts, fp 1st 퍼트 거리(m),
  *   gmiss 그린 미스(짧음/길음/좌/우/-), appr 어프로치 시작거리(m), bunker 벙커샷 수, sg 숏게임 성공(1/0), pen 벌타, memo
  */
 const GolfStats = (() => {
@@ -40,9 +40,8 @@ const GolfStats = (() => {
     return x === "L" || x === "H" ? "L" : x === "R" || x === "S" ? "R" : null;
   };
 
-  // GIR: 직접 입력 우선 → 온그린 타수 ≤ Par−2 → (둘 다 없으면) 타수−퍼트 ≤ Par−2
+  // GIR: 온그린 타수 ≤ Par−2, 온그린 타수가 없으면 (타수−퍼트) ≤ Par−2. (v1.1부터 'GIR 직접' 입력은 없앴다)
   function holeGir(h) {
-    if (isNum(h.gir)) return h.gir ? 1 : 0;
     if (!isNum(h.par)) return null;
     if (isNum(h.ong)) return h.ong <= h.par - 2 ? 1 : 0;
     if (isNum(h.putts) && isNum(h.score)) return h.par + h.score - h.putts <= h.par - 2 ? 1 : 0;
