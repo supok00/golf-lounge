@@ -55,7 +55,7 @@ const GolfStats = (() => {
     const n = hs.length;
     const full = n === 18 && hs.every((h) => isNum(h.par));
     const out = {
-      id: r.id, date: r.date, time: r.time || "", year: Number(String(r.date).slice(0, 4)), course: r.course, holes: n, full,
+      id: r.id, date: r.date, time: r.time || "", region: r.region || "", year: Number(String(r.date).slice(0, 4)), course: r.course, holes: n, full,
       over: sum(hs.map((h) => h.score)),
       strokes: full ? sum(hs.map((h) => h.par + h.score)) : null,
       front: full ? sum(hs.filter((h) => h.h <= 9).map((h) => h.par + h.score)) : null,

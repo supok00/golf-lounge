@@ -1,6 +1,5 @@
-/* 골프장 지역(시·도). 라운드 데이터에는 지역이 없어서, 아는 골프장은 기본값을 두고
- * 사용자가 설정 → 골프장 지역에서 고친 값(settings.regions)을 우선한다.
- * 기본값 중 확실하지 않은 곳은 guess(추정)로 표시한다. */
+/* 골프장 지역(시·도). 지역은 라운드마다 입력한다(round.region).
+ * 새 라운드를 입력할 때는 같은 골프장의 최근 라운드 지역을, 없으면 아는 골프장 기본값을 제안한다. */
 const Regions = (() => {
   // 한국 시·도 타일 지도 배치 [이름, 열, 행] — 대략적인 위치만 맞춘 칸 지도
   const TILES = [
@@ -24,22 +23,23 @@ const Regions = (() => {
     "남여주GC": ["경기"], "써닝포인트CC": ["경기"], "센추리21CC": ["강원"], "양지파인CC": ["경기"], "은화삼CC": ["경기"],
   };
 
-  function of(course, settings) {
-    const custom = settings && settings.regions && settings.regions[course];
-    if (custom) return { region: custom, guess: false, custom: true };
-    const d = DEFAULTS[course];
-    if (d) return { region: d[0], guess: !!d[1], custom: false };
-    // 기본값에 없는 골프장: 이름에 시·도 이름이 들어 있으면 그것으로 추정(예: '엘리시안제주' → 제주)
-    const hit = NAMES.find((n) => String(course).includes(n));
-    return hit ? { region: hit, guess: true, custom: false } : { region: "미지정", guess: false, custom: false };
+  // 이 골프장에 넣을 지역 제안: 같은 골프장 최근 라운드의 지역 → 기본값 → 이름에 든 시·도 → 없음("")
+  function suggest(course, rounds) {
+    const prev = (rounds || []).filter((r) => r.course === course && r.region).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    if (prev) return prev.region;
+    if (DEFAULTS[course]) return DEFAULTS[course][0];
+    return NAMES.find((n) => String(course || "").includes(n)) || "";
   }
+  // 라운드의 지역: 입력한 값, 없으면(예전 기록) 제안값, 그것도 없으면 '미지정'
+  const of = (r, rounds) => r.region || suggest(r.course, rounds) || "미지정";
 
-  /* 지역별 집계: { 지역: { courses: [{course, n, avg, best, last, lastScore}], rounds } } */
-  function summarize(rs, settings) {
+  /* 지역별 집계: { 지역: { courses: [{course, n, avg, best, last, lastScore}], rounds } }
+   * rs: 통계용 라운드(GolfStats.round 결과, region 포함), rounds: 원본 라운드(지역 제안용) */
+  function summarize(rs, rounds) {
     const S = GolfStats;
     const out = {};
     for (const r of rs) {
-      const reg = of(r.course, settings).region;
+      const reg = of(r, rounds);
       (out[reg] = out[reg] || { rounds: 0, byCourse: new Map() }).rounds++;
       const m = out[reg].byCourse;
       if (!m.has(r.course)) m.set(r.course, []);
@@ -83,5 +83,5 @@ const Regions = (() => {
     return `<svg class="kmap-svg" viewBox="${vb.join(" ")}" role="img" aria-label="대한민국 지역별 방문 골프장 수">${shapes}${labels}</svg>`;
   }
 
-  return { TILES, NAMES, DEFAULTS, of, summarize, svg };
+  return { TILES, NAMES, DEFAULTS, suggest, of, summarize, svg };
 })();

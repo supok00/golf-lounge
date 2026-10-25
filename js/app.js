@@ -360,7 +360,7 @@
     if (id && !edit) { app.innerHTML = `<p>라운드를 찾을 수 없습니다. <a href="#/rounds">목록으로</a></p>`; return; }
     const draftKey = KEY_DRAFT + (edit ? ":" + edit.id : ":new");
     const draft = ls.get(draftKey);
-    const base = edit ? structuredClone(edit) : { date: new Date().toISOString().slice(0, 10), course: "", front: "", back: "", tee: "White", memo: "", holes: [] };
+    const base = edit ? structuredClone(edit) : { date: new Date().toISOString().slice(0, 10), course: "", front: "", back: "", tee: "White", region: "", memo: "", holes: [] };
     let r = draft && draft.holes ? draft : base;
     const H = Object.fromEntries(Array.from({ length: 18 }, (_, i) => [i + 1, { h: i + 1 }]));
     (r.holes || []).forEach((h) => (H[h.h] = { ...h }));
@@ -426,6 +426,7 @@
           <label class="f">전반 코스<input id="fFront" value="${esc(r.front)}" placeholder="예: NORTH"></label>
           <label class="f">후반 코스<input id="fBack" value="${esc(r.back)}" placeholder="예: WEST"></label>
           <label class="f">티<input id="fTee" list="teeList" value="${esc(r.tee || "")}"></label>
+          <label class="f">지역<select id="fRegion"><option value="">선택</option>${Regions.NAMES.map((n) => `<option ${n === (r.region || Regions.suggest(r.course, rounds)) ? "selected" : ""}>${n}</option>`).join("")}</select></label>
           <label class="f">날씨·컨디션·메모<input id="fMemo" value="${esc(r.memo)}"></label>
         </div>
         <datalist id="courseList">${courses.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
@@ -450,7 +451,7 @@
       <p class="legend-note">중간에 저장해도 됩니다. 나중에 「수정」으로 이어서 입력할 수 있습니다.</p>`;
 
     const $ = (s) => document.getElementById(s);
-    const meta = () => ({ date: $("fDate").value, course: $("fCourse").value.trim(), front: $("fFront").value.trim(), back: $("fBack").value.trim(), tee: $("fTee").value.trim(), memo: $("fMemo").value.trim() });
+    const meta = () => ({ date: $("fDate").value, course: $("fCourse").value.trim(), front: $("fFront").value.trim(), back: $("fBack").value.trim(), tee: $("fTee").value.trim(), region: $("fRegion").value, memo: $("fMemo").value.trim() });
     const holesArr = () => Object.values(H).map((h) => Object.fromEntries(Object.entries(h).filter(([, v]) => v !== "" && v !== null && v !== undefined))).filter((h) => Object.keys(h).length > 1);
     const saveDraft = () => ls.set(draftKey, { ...meta(), id: edit?.id, holes: holesArr() });
 
@@ -513,7 +514,15 @@
     }
     function drawAll(card = true) { drawNav(); if (card) drawCard(); drawPreview(); }
     drawAll();
-    ["fDate", "fCourse", "fFront", "fBack", "fTee", "fMemo"].forEach((x) => $(x).addEventListener("input", saveDraft));
+    ["fDate", "fCourse", "fFront", "fBack", "fTee", "fRegion", "fMemo"].forEach((x) => $(x).addEventListener("input", saveDraft));
+    // 골프장을 바꾸면 지역을 그 골프장의 최근 지역으로 맞춘다. 지역을 직접 고른 뒤에는 건드리지 않는다.
+    let regionTouched = !!r.region;
+    $("fRegion").addEventListener("change", () => (regionTouched = true));
+    $("fCourse").addEventListener("input", () => {
+      if (regionTouched) return;
+      $("fRegion").value = Regions.suggest($("fCourse").value.trim(), rounds);
+      saveDraft();
+    });
     $("bPrev").onclick = () => { cur = cur === 1 ? 18 : cur - 1; drawAll(); };
     $("bNext").onclick = () => { cur = cur === 18 ? 1 : cur + 1; drawAll(); };
     if ($("bDiscard")) $("bDiscard").onclick = () => { ls.del(draftKey); inputView(id); };
@@ -636,7 +645,7 @@
     const rawFmt = (k, v) => (!isNum(v) ? "-" : ["fw", "gir", "scr"].includes(k) ? pct(v) : k === "pph" ? v.toFixed(2) + "개" : k === "fp" ? v.toFixed(1) + "m" : v.toFixed(1) + "타");
     app.innerHTML = `
       <div class="row" style="justify-content:space-between">
-        <h2>${dot(r.date)} ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join(" / "))}${r.tee ? " · " + esc(r.tee) : ""}</span></h2>
+        <h2>${dot(r.date)} ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join(" / "))}${r.tee ? " · " + esc(r.tee) : ""}${r.region ? " · 📍" + esc(r.region) : ""}</span></h2>
         <div class="row"><a class="btn ghost" href="#/edit/${encodeURIComponent(r.id)}">수정</a><button class="btn danger" id="bDel" type="button" ${G.canWrite() ? "" : "disabled"}>삭제</button></div>
       </div>
       <div class="kpis">
@@ -821,12 +830,12 @@
       <h2>다녀온 지역 <span class="muted">시·도별 골프장 수 · 누르면 골프장 목록</span></h2>
       <div class="card">
         ${(() => {
-          const RS = Regions.summarize(A.rs, settings);
+          const RS = Regions.summarize(A.rs, rounds);
           const extra = ["해외", "미지정"].filter((k) => RS[k]).map((k) => `<button type="button" class="chip" data-reg="${k}">${k} ${RS[k].courses.length}곳</button>`).join(" ");
           const regs = Object.keys(RS).filter((k) => k !== "미지정");
           return `<div class="kmap-wrap"><div class="kmap-map">${Regions.svg(RS)}</div>
             <div class="kmap-side"><div class="kmap-total"><b>${regs.length}</b>개 지역 · <b>${S.sum(Object.values(RS).map((x) => x.courses.length))}</b>곳 골프장</div>${extra ? `<div class="row" style="margin-top:8px">${extra}</div>` : ""}
-            ${RS["미지정"] ? `<p class="legend-note">지역을 모르는 골프장은 「미지정」입니다. <a href="#/settings">설정 → 골프장 지역</a>에서 정해 주세요.</p>` : ""}</div></div>
+            ${RS["미지정"] ? `<p class="legend-note">지역이 없는 라운드는 「미지정」입니다. 라운드 「수정」에서 지역을 골라 주세요.</p>` : ""}</div></div>
             <div id="regionPanel"></div>`;
         })()}
       </div>
@@ -844,14 +853,14 @@
         <tbody>${I.d90.list.map((r) => `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}${r.time ? " " + esc(r.time) : ""}</td><td class="l">${esc(r.course)}</td><td><b>${r.strokes ?? "-"}</b></td><td>${sgn(r.over, 0)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">최근 90일 라운드가 없습니다.</p>`}`;
     app.querySelectorAll("tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
     // 지역 타일을 누르면 그 지역 골프장 목록
-    const RS = Regions.summarize(A.rs, settings);
+    const RS = Regions.summarize(A.rs, rounds);
     const showRegion = (reg) => {
       const x = RS[reg];
       app.querySelectorAll("[data-reg]").forEach((b) => b.classList.toggle("sel", b.dataset.reg === reg));
       if (!x) { document.getElementById("regionPanel").innerHTML = ""; return; }
       document.getElementById("regionPanel").innerHTML = `<div class="region-panel"><div class="region-head">📍 ${reg} <span class="muted">골프장 ${x.courses.length}곳 · ${x.rounds}라운드</span></div>
         <div class="tbl-wrap"><table><thead><tr><th class="l">골프장</th><th>방문</th><th>18홀 평균</th><th>베스트</th><th>최근 방문</th><th>최근 점수</th></tr></thead>
-        <tbody>${x.courses.map((c) => `<tr class="click" data-course="${esc(c.course)}"><td class="l"><b>${esc(c.course)}</b>${Regions.of(c.course, settings).guess ? ` <span class="pill">추정</span>` : ""}</td><td>${c.n}</td><td>${f1(c.avg)}</td><td>${c.best ?? "-"}</td><td>${dot(c.last)}</td><td>${c.lastScore ?? "-"}</td></tr>`).join("")}</tbody></table></div>
+        <tbody>${x.courses.map((c) => `<tr class="click" data-course="${esc(c.course)}"><td class="l"><b>${esc(c.course)}</b></td><td>${c.n}</td><td>${f1(c.avg)}</td><td>${c.best ?? "-"}</td><td>${dot(c.last)}</td><td>${c.lastScore ?? "-"}</td></tr>`).join("")}</tbody></table></div>
         <p class="legend-note">골프장을 누르면 그 골프장 라운드만 라운드 목록에서 봅니다.</p></div>`;
       document.querySelectorAll("#regionPanel [data-course]").forEach((tr) => (tr.onclick = () => { F.course = tr.dataset.course; ls.set(KEY_FILTER, F); location.hash = "#/rounds"; }));
     };
@@ -920,7 +929,7 @@
         const picks = parsed.filter((r) => r.pick);
         bi.disabled = true;
         bi.textContent = "등록 중…";
-        const objs = picks.map((r, i) => ({ id: "r" + r.date.replaceAll("-", "") + "-" + (Date.now() + i).toString(36), date: r.date, time: r.time, course: r.course, front: r.front, back: r.back, tee: r.tee || "", memo: "스마트스코어 붙여넣기로 등록" + (r.distCount ? ` (거리 ${r.distCount}홀 포함)` : ""), holes: r.holes }));
+        const objs = picks.map((r, i) => ({ id: "r" + r.date.replaceAll("-", "") + "-" + (Date.now() + i).toString(36), date: r.date, time: r.time, course: r.course, front: r.front, back: r.back, tee: r.tee || "", region: Regions.suggest(r.course, rounds), memo: "스마트스코어 붙여넣기로 등록" + (r.distCount ? ` (거리 ${r.distCount}홀 포함)` : ""), holes: r.holes }));
         try {
           await commit((data) => data.concat(objs).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)), `스마트스코어 등록 ${objs.length}건: ${objs.map((o) => o.date + " " + o.course).join(", ")}`.slice(0, 250));
           toast(`${objs.length}개 라운드를 등록했습니다.`);
@@ -1083,12 +1092,6 @@
       <div class="row" style="margin-top:10px"><button class="btn" id="bSaveClubs" type="button" ${G.canWrite() ? "" : "disabled"}>클럽 거리 GitHub에 저장</button><button class="btn ghost" id="bClubDefault" type="button">예시값으로</button></div>
       <p class="legend-note">저장하면 라운드 입력의 <b>공략 가이드</b>와 상세 분석 <b>⑨ 예상 어프로치 클럽별</b>에 쓰입니다. 안 쓰는 클럽은 「사용」을 끄세요.</p>
 
-      <h2>골프장 지역 <span class="muted">인사이트 → 다녀온 지역에 쓰임</span></h2>
-      <div class="tbl-wrap"><table><thead><tr><th class="l">골프장</th><th>지역</th><th class="l">상태</th></tr></thead>
-        <tbody>${[...new Set(rounds.map((x) => x.course))].sort().map((c, i) => { const o = Regions.of(c, settings); return `<tr><td class="l">${esc(c)}</td><td><select data-reg-course="${esc(c)}" data-init="${o.region}">${[...Regions.NAMES, "미지정"].map((n) => `<option ${n === o.region ? "selected" : ""}>${n}</option>`).join("")}</select></td><td class="l">${o.custom ? `<span class="pill ok">직접 지정</span>` : o.guess ? `<span class="pill ng">추정 — 확인해 주세요</span>` : o.region === "미지정" ? `<span class="pill ng">미지정</span>` : `<span class="muted">기본값</span>`}</td></tr>`; }).join("")}</tbody></table></div>
-      <div class="row" style="margin-top:10px"><button class="btn" id="bSaveReg" type="button" ${G.canWrite() ? "" : "disabled"}>골프장 지역 GitHub에 저장</button></div>
-      <p class="legend-note">기본값은 제가 아는 범위로 넣은 것이고, 「추정」은 확실하지 않은 곳입니다. 바꾼 지역만 저장해도 되고 그대로 두면 기본값을 씁니다.</p>
-
       <h2>버전 <span class="muted">v${APP_VERSION}</span></h2>
       <div class="card">${APP_CHANGES.map((c) => `<h3 class="mt0">v${c.v} <span class="muted">${c.date}</span></h3><ul>${c.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")}
         <p class="legend-note">이전 버전 화면 보기(읽기 전용): ${APP_CHANGES.filter((c) => c.v !== APP_VERSION).map((c) => `<a href="v${c.v}/" target="_blank" rel="noopener">v${c.v}</a>`).join(" · ")} — 주소 뒤에 <code>/v1.0</code>처럼 붙여도 됩니다.</p>
@@ -1172,22 +1175,6 @@
       toast("드라이버 거리를 바꿨습니다. 「클럽 거리 GitHub에 저장」을 눌러야 저장됩니다.", 4000);
     };
     drawGaps();
-    $("bSaveReg").onclick = async () => {
-      // 화면에서 바꾼 골프장만 '직접 지정'으로 저장한다(안 건드린 추정값은 추정으로 남긴다)
-      const reg = { ...(settings.regions || {}) };
-      app.querySelectorAll("[data-reg-course]").forEach((sel) => {
-        const c = sel.dataset.regCourse;
-        if (sel.value === sel.dataset.init) return;
-        if (sel.value === "미지정") delete reg[c];
-        else reg[c] = sel.value;
-      });
-      settings.regions = reg;
-      try {
-        const { mirrorErrors } = await G.update(() => settings, "골프장 지역 변경", G.SETTINGS || "data/settings.json");
-        toast(mirrorErrors.length ? "저장했지만 동기화 실패: " + mirrorErrors.join(" / ") : "골프장 지역을 저장했습니다.", 4000);
-        settingsView();
-      } catch (e) { toast(e.message, 6000); }
-    };
     $("bSaveClubs").onclick = async () => {
       settings.clubs = readClubs();
       try {

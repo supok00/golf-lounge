@@ -128,7 +128,7 @@ tr.click:hover td { background: #f0f6ff; }
 .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .form > *, label.f, .card, .tbl-wrap { min-width: 0; }
 label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
-label.f input, label.f textarea { width: 100%; }
+label.f input, label.f textarea, label.f select { width: 100%; }
 input, select, textarea {
   font: inherit; font-size: 16px; padding: 9px 11px; border: 1px solid #d6deec; border-radius: 10px; background: #fff; color: var(--ink); min-width: 0;
 }

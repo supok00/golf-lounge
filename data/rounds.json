@@ -6,6 +6,7 @@
   "front": "마루",
   "back": "누리",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -107,6 +108,7 @@
   "front": "EAST",
   "back": "WEST",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -208,6 +210,7 @@
   "front": "밸리",
   "back": "레이크",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -309,6 +312,7 @@
   "front": "가람",
   "back": "마루",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -410,6 +414,7 @@
   "front": "",
   "back": "",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만), 코스명 없음",
   "holes": [
    {
@@ -511,6 +516,7 @@
   "front": "예술 Out",
   "back": "예술 In",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -612,6 +618,7 @@
   "front": "",
   "back": "",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만), 코스명 없음",
   "holes": [
    {
@@ -713,6 +720,7 @@
   "front": "",
   "back": "",
   "tee": "White",
+  "region": "인천",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만), 코스명 없음",
   "holes": [
    {
@@ -814,6 +822,7 @@
   "front": "Valley",
   "back": "Mountain",
   "tee": "White",
+  "region": "강원",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -915,6 +924,7 @@
   "front": "레이크",
   "back": "밸리",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1016,6 +1026,7 @@
   "front": "밸리",
   "back": "레이크",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1117,6 +1128,7 @@
   "front": "남",
   "back": "동",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1218,6 +1230,7 @@
   "front": "East",
   "back": "South",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1319,6 +1332,7 @@
   "front": "IN",
   "back": "OUT",
   "tee": "White",
+  "region": "인천",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1420,6 +1434,7 @@
   "front": "레이크",
   "back": "밸리",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1521,6 +1536,7 @@
   "front": "Oak Hill",
   "back": "Birch Hill",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1622,6 +1638,7 @@
   "front": "PARK OUT",
   "back": "PARK IN",
   "tee": "White",
+  "region": "인천",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1723,6 +1740,7 @@
   "front": "마운틴",
   "back": "레이크",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1824,6 +1842,7 @@
   "front": "지왕봉",
   "back": "인왕봉",
   "tee": "White",
+  "region": "광주",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -1925,6 +1944,7 @@
   "front": "천왕봉",
   "back": "인왕봉",
   "tee": "White",
+  "region": "광주",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -2026,6 +2046,7 @@
   "front": "DREAM OUT",
   "back": "DREAM IN",
   "tee": "White",
+  "region": "인천",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -2127,6 +2148,7 @@
   "front": "오너스A",
   "back": "오너스B",
   "tee": "White",
+  "region": "강원",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -2228,6 +2250,7 @@
   "front": "남 Out",
   "back": "남 In",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -2329,6 +2352,7 @@
   "front": "Olympus",
   "back": "Titan",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -2430,6 +2454,7 @@
   "front": "PARK OUT",
   "back": "PARK IN",
   "tee": "White",
+  "region": "인천",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -2531,6 +2556,7 @@
   "front": "Lake COURSE (Out)",
   "back": "Ocean COURSE (In)",
   "tee": "White",
+  "region": "제주",
   "memo": "기존 엑셀에서 옮긴 기록",
   "holes": [
    {
@@ -2772,6 +2798,7 @@
   "front": "스카이 COURSE (Out)",
   "back": "팜 COURSE (In)",
   "tee": "White",
+  "region": "제주",
   "memo": "기존 엑셀에서 옮긴 기록",
   "holes": [
    {
@@ -3013,6 +3040,7 @@
   "front": "Pine COURSE (Out)",
   "back": "Lake COURSE (In)",
   "tee": "White",
+  "region": "제주",
   "memo": "기존 엑셀에서 옮긴 기록",
   "holes": [
    {
@@ -3254,6 +3282,7 @@
   "front": "(Out)",
   "back": "(IN)",
   "tee": "White",
+  "region": "경기",
   "memo": "기존 엑셀에서 옮긴 기록",
   "holes": [
    {
@@ -3477,6 +3506,7 @@
   "front": "West",
   "back": "East",
   "tee": "White",
+  "region": "경기",
   "memo": "기존 엑셀에서 옮긴 기록",
   "holes": [
    {
@@ -3693,6 +3723,7 @@
   "front": "West",
   "back": "East",
   "tee": "White",
+  "region": "경기",
   "memo": "기존 엑셀에서 옮긴 기록",
   "holes": [
    {
@@ -3934,6 +3965,7 @@
   "front": "SOL-IN",
   "back": "SOL-OUT",
   "tee": "White",
+  "region": "충남",
   "memo": "기존 엑셀에서 옮긴 기록",
   "holes": [
    {
@@ -4157,6 +4189,7 @@
   "front": "실크",
   "back": "코튼",
   "tee": "White",
+  "region": "충북",
   "memo": "",
   "holes": [
    {
@@ -4258,6 +4291,7 @@
   "front": "OUT",
   "back": "IN",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -4359,6 +4393,7 @@
   "front": "네오",
   "back": "로제",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -4460,6 +4495,7 @@
   "front": "Queens In",
   "back": "Queens Out",
   "tee": "White",
+  "region": "충북",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -4561,6 +4597,7 @@
   "front": "서",
   "back": "남",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -4662,6 +4699,7 @@
   "front": "레이크",
   "back": "밸리",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -4763,6 +4801,7 @@
   "front": "Olympus",
   "back": "Titan",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -4864,6 +4903,7 @@
   "front": "문화 Out",
   "back": "문화 In",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -4965,6 +5005,7 @@
   "front": "NORTH",
   "back": "WEST",
   "tee": "White",
+  "region": "경기",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -5066,6 +5107,7 @@
   "front": "브릿지",
   "back": "힐",
   "tee": "White",
+  "region": "강원",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -5167,6 +5209,7 @@
   "front": "라미",
   "back": "실크",
   "tee": "White",
+  "region": "충북",
   "memo": "네이버 스마트스코어에서 옮김 (홀별 Par·Score만)",
   "holes": [
    {
@@ -5268,6 +5311,7 @@
   "front": "동",
   "back": "서",
   "tee": "White",
+  "region": "경기",
   "memo": "10홀 부분 라운드(전반 41 + 후반 1홀 4 = 45). 홀별 Par는 이미지에 없어 비움",
   "holes": [
    {
@@ -5329,6 +5373,7 @@
   "front": "드림OUT",
   "back": "드림IN",
   "tee": "White",
+  "region": "인천",
   "memo": "맑음",
   "holes": [
    {
