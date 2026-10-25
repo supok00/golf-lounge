@@ -689,6 +689,28 @@
     return html;
   }
 
+  /* 사진을 라운드 편집 상태(st)에 넣는다: 사진은 저장 목록에, 사진 속 「이름 숫자…」 줄은 동반자로 바로 추가.
+   * 동반자로 못 읽은 글자는 붙여넣기 칸(st.text)에 남겨 직접 고치게 한다. 반환: 추가된 동반자 수 */
+  async function photosIn(files, st, pars, msg, onChange = () => {}) {
+    let added = 0, unread = 0;
+    for (const [n, f] of files.entries()) {
+      try {
+        if (st.keep !== false) { st.photos.push(await Companions.shrink(f)); onChange(); }
+        if (st.ocr === false) continue;
+        if (msg) msg.innerHTML = `<div class="notice">사진 ${n + 1}/${files.length}에서 글자 읽는 중… <span data-p>0%</span> (처음에는 인식 데이터를 받느라 오래 걸릴 수 있음)</div>`;
+        const text = await Companions.ocr(f, (s, p) => { const el = msg && msg.querySelector("[data-p]"); if (el) el.textContent = `${Math.round(p * 100)}%`; });
+        const got = applyAlias(Companions.parse(text, pars, { skipScore: true }));
+        for (const c of got) { const i = st.comps.findIndex((x) => x.name === c.name); if (i >= 0) st.comps[i] = c; else st.comps.push(c); }
+        added += got.length;
+        // 못 읽었거나 숫자가 의심스러우면 읽은 글자를 붙여넣기 칸에도 넣어, 고친 뒤 「읽어서 추가」로 덮어쓰게 한다
+        if ((!got.length || got.some((c) => c.warnings.some((w) => w.includes("확인 필요") || w.includes("홀만")))) && text.trim()) { st.text = (st.text ? st.text + "\n" : "") + text; unread++; }
+        onChange();
+      } catch (err) { toast(err.message || String(err), 6000); }
+    }
+    if (msg) msg.innerHTML = st.ocr === false ? "" : `<div class="notice">${added ? `사진에서 동반자 <b>${added}명</b>을 읽어 넣었습니다. 이름(*)·숫자가 맞는지 확인해 주세요. ` : ""}${unread ? `읽은 글자를 「붙여넣기로 추가」 칸에도 넣었습니다. 틀린 숫자·이름을 고친 뒤 「읽어서 추가」를 누르면 같은 이름은 고친 값으로 바뀝니다.` : added ? "" : "사진에서 글자를 읽지 못했습니다. 동반자 점수를 직접 넣어 주세요."}</div>`;
+    return added;
+  }
+
   /* 동반자·사진 편집기. st = { comps, photos: [{path} | {dataUrl, b64}], removed: [지울 사진 경로], text: 붙여넣기 칸 }
    * 저장은 부르는 쪽에서 한다(라운드 상세는 바로, 붙여넣기 등록은 라운드를 등록할 때). */
   function companionEditor(box, st, pars, onChange = () => {}) {
@@ -741,18 +763,10 @@
       q('[data-act="file"]').onchange = async (e) => {
         const files = [...e.target.files];
         const msg = q('[data-act="msg"]');
-        for (const f of files) {
-          try {
-            if (st.keep !== false) { st.photos.push(await Companions.shrink(f)); onChange(); }
-            if (st.ocr !== false) {
-              msg.innerHTML = `<div class="notice">사진에서 글자 읽는 중… <span data-p>0%</span></div>`;
-              const text = await Companions.ocr(f, (s, p) => { const el = msg.querySelector("[data-p]"); if (el) el.textContent = `${s} ${Math.round(p * 100)}%`; });
-              st.text = (st.text ? st.text + "\n" : "") + text;
-            }
-          } catch (err) { toast(err.message || String(err), 6000); }
-        }
+        await photosIn(files, st, pars, msg, onChange);
+        const keep = msg.innerHTML;
         draw();
-        if (st.ocr !== false && files.length) q('[data-act="msg"]').innerHTML = `<div class="notice">읽은 글자를 붙여넣기 칸에 넣었습니다. 이름·숫자를 확인하고 필요 없는 줄은 지운 뒤 「읽어서 추가」를 누르세요.</div>`;
+        q('[data-act="msg"]').innerHTML = keep;
       };
     }
     draw();
@@ -1113,10 +1127,30 @@
       </ul>
       ${G.canWrite() ? "" : `<div class="notice">저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요. 읽기와 확인은 지금도 됩니다.</div>`}
       <textarea id="ssText" class="pastebox" placeholder="예)&#10;기흥CC&#10;NORTH, WEST&#10;2026-08-29 07:10&#10;80&#10;홀별 스코어&#10;Par 4 4 3 ...&#10;Score 0 1 0 ...&#10;White 320 300 140 ...   ← 홀 길이(선택)&#10;Par ...&#10;Score ...&#10;White ..."></textarea>
-      <div class="row" style="margin-top:8px"><button class="btn" id="bParse" type="button">읽기</button><button class="btn ghost" id="bClear" type="button">지우기</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="bParse" type="button">읽기</button><button class="btn ghost" id="bClear" type="button">지우기</button>
+        <label class="btn ghost filebtn">📷 사진 첨부 (동반자 점수)<input type="file" accept="image/*" multiple id="ssPhoto" hidden></label></div>
+      <p class="legend-note">스코어카드·스마트스코어 화면 사진을 첨부하면 사진 속 동반자 「이름·점수」를 읽어 동반자로 넣고, 사진은 라운드에 함께 저장합니다. 글을 먼저 붙여 넣으면 그 라운드에 붙습니다(여러 라운드면 「추가·편집」을 연 라운드, 아니면 첫 번째 등록 대상).</p>
+      <div id="ssPhotoMsg" class="ocr-msg"></div>
       <div id="ssOut"></div>`;
     const $ = (x) => document.getElementById(x);
-    $("bClear").onclick = () => { $("ssText").value = ""; $("ssOut").innerHTML = ""; parsed = []; };
+    $("bClear").onclick = () => { $("ssText").value = ""; $("ssOut").innerHTML = ""; $("ssPhotoMsg").innerHTML = ""; parsed = []; };
+    $("ssPhoto").onchange = async (e) => {
+      const files = [...e.target.files];
+      e.target.value = "";
+      if (!files.length) return;
+      if (!parsed.length && $("ssText").value.trim()) $("bParse").click();
+      const idx = compIdx >= 0 && parsed[compIdx] ? compIdx : parsed.findIndex((r) => r.pick) >= 0 ? parsed.findIndex((r) => r.pick) : parsed.findIndex((r) => r.holes.length);
+      if (idx < 0) { $("ssPhotoMsg").innerHTML = `<div class="notice">먼저 위 칸에 스마트스코어 글을 붙여 넣어 주세요. 사진과 동반자는 그 라운드에 붙습니다.</div>`; return; }
+      const pr = parsed[idx];
+      compIdx = idx;
+      drawParsed();
+      const msg = $("ssPhotoMsg");
+      await photosIn(files, pr.st, parsOf(pr), msg);
+      const keep = msg.innerHTML.replace('<div class="notice">', `<div class="notice">📎 ${dot(pr.date)} ${esc(pr.course)}: `);
+      drawParsed();
+      $("ssPhotoMsg").innerHTML = keep;
+      $("ssComp").scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     $("bParse").onclick = () => {
       parsed = SmartScore.parse($("ssText").value).map((r) => {
         const course = SmartScore.matchCourse(r.course, known);

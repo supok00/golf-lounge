@@ -20,7 +20,7 @@ const Companions = (() => {
   // OCR 결과에서 자주 틀리는 글자를 숫자로 고친다(숫자 사이에 있을 때만)
   function cleanOcr(text) {
     return String(text).split("\n").map((l) => l
-      .replace(/[|¦]/g, " ")
+      .replace(/[|¦\[\]{}()]/g, " ")
       .replace(/(?<=[\s\d])[Oo](?=[\s\d]|$)/g, "0")
       .replace(/(?<=[\s\d])[lI](?=[\s\d]|$)/g, "1")
       .replace(/\s{2,}/g, " ").trim())
@@ -57,7 +57,7 @@ const Companions = (() => {
    * opts.skipScore: 「Score」 줄은 내 것으로 보고 건너뛴다(스마트스코어 붙여넣기 등록 화면). */
   function parse(text, pars = {}, opts = {}) {
     const chunks = [];   // 이름 순서대로 [{ name, nums }]
-    let pending = "";
+    let pending = "", unnamed = 0;
     for (let line of String(text || "").replace(/\r/g, "").split("\n")) {
       line = line.replace(/\t/g, " ").trim();
       // 숫자 사이에 낀 OUT·IN·합계 같은 칸 이름은 지운다(숫자는 남기고 stripTotals가 합계 칸을 뺀다)
@@ -77,8 +77,13 @@ const Companions = (() => {
         if (opts.skipScore || !pending) continue;
         label = pending;
       } else if (!label) {
-        if (!pending) continue;
-        label = pending;
+        if (pending) label = pending;
+        else if (nums.length >= 9) {
+          // 이름을 숫자로 잘못 읽은 줄(사진): 홀 칸보다 하나 많고 첫 값이 점수일 수 없으면 그 값을 버린다.
+          // 이름은 「이름*n」으로 두어 빨간 칸으로 표시 — 직접 적어야 저장된다.
+          if ((nums.length === 10 || nums.length === 11 || nums.length === 19) && Math.abs(nums[0]) > 15) nums.shift();
+          label = `이름*${++unnamed}`;
+        } else continue;
       }
       chunks.push({ name: label, nums });
     }
@@ -110,11 +115,13 @@ const Companions = (() => {
         if (!absolute && known.length < hs.length) p.warnings.push("+/-로 적었는데 Par를 모르는 홀이 있어 그 홀은 넣지 않음");
         p.holes = hs.filter((x) => absolute || isNum(pars[x.h])).map((x) => ({ h: x.h, st: absolute ? x.v : pars[x.h] + x.v }));
         if (vals.length !== 9 && vals.length !== 18) p.warnings.push(`${vals.length}홀만 읽음`);
+        const odd = p.holes.filter((x) => x.st < 1 || x.st > 15).map((x) => x.h);
+        if (odd.length) p.warnings.push(`${odd.join("·")}번 홀 타수가 이상함 — 확인 필요`);
       }
       // 홀 기록과 따로 적은 합계가 다르면 알려 준다
       const s = summary(p);
       if (p.total !== null && s.holesTotal !== null && p.total !== s.holesTotal) p.warnings.push(`총타수 표기 ${p.total} ≠ 홀 합계 ${s.holesTotal}`);
-      if (/\*/.test(name)) p.warnings.push("이름에 *가 있음 — 고쳐 주세요");
+      if (/\*/.test(name)) p.warnings.push(name.startsWith("이름*") ? "이름을 읽지 못함 — 적어 주세요" : "이름에 *가 있음 — 고쳐 주세요");
       out.push(p);
     }
     return out;
@@ -156,8 +163,59 @@ const Companions = (() => {
     if (!window.Tesseract) {
       await new Promise((ok, no) => { const s = document.createElement("script"); s.src = OCR_LIB; s.onload = ok; s.onerror = () => no(new Error("글자 인식 프로그램을 받지 못했습니다(인터넷 연결 확인).")); document.head.appendChild(s); });
     }
-    const { data } = await window.Tesseract.recognize(file, "kor+eng", { logger: (m) => onProgress && isNum(m.progress) && onProgress(m.status, m.progress) });
-    return cleanOcr(data.text || "");
+    const img = await prepare(file);
+    const w = await window.Tesseract.createWorker("kor+eng", 1, { logger: (m) => onProgress && isNum(m.progress) && onProgress(m.status, m.progress) });
+    try {
+      // 6 = 글자 덩어리 하나로 보고 줄 단위로 읽기(표·스코어카드에 맞음), 칸 사이 공백 유지
+      await w.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
+      const { data } = await w.recognize(img);
+      return cleanOcr(data.text || "");
+    } finally { await w.terminate(); }
+  }
+
+  /* 인식 전처리: 작은 사진은 키우고, 흑백으로 바꾼 뒤 표의 가로·세로 선을 지운다.
+   * 스코어카드 칸 선이 남아 있으면 「]」「|」 같은 글자로 읽혀 숫자가 깨진다. */
+  async function prepare(file) {
+    let img;
+    try { img = await createImageBitmap(file, { imageOrientation: "from-image" }); } catch {
+      img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error("사진을 열 수 없습니다.")); i.src = URL.createObjectURL(file); });
+    }
+    const k = Math.min(3, Math.max(1, 1800 / img.width));
+    const W = Math.round(img.width * k), H = Math.round(img.height * k);
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    ctx.drawImage(img, 0, 0, W, H);
+    const d = ctx.getImageData(0, 0, W, H), px = d.data;
+    // 밝기 평균으로 문턱값을 잡아 흑백으로(어두운 배경 화면 캡처면 뒤집는다)
+    const lum = new Float32Array(W * H);
+    let mean = 0;
+    for (let i = 0; i < W * H; i++) { lum[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]; mean += lum[i]; }
+    mean /= W * H;
+    const darkBg = mean < 110, th = darkBg ? mean + 40 : mean - 40;
+    const ink = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) ink[i] = darkBg ? lum[i] > th : lum[i] < th;
+    // 긴 선 지우기: 한 줄(가로) 또는 한 칸(세로)에 잉크가 길게 이어진 부분
+    const minRun = (n) => Math.max(40, n * 0.25);
+    for (let y = 0; y < H; y++) {
+      let run = 0;
+      for (let x = 0; x <= W; x++) {
+        if (x < W && ink[y * W + x]) { run++; continue; }
+        if (run >= minRun(W)) for (let t = x - run; t < x; t++) ink[y * W + t] = 2;
+        run = 0;
+      }
+    }
+    for (let x = 0; x < W; x++) {
+      let run = 0;
+      for (let y = 0; y <= H; y++) {
+        if (y < H && ink[y * W + x]) { run++; continue; }
+        if (run >= Math.max(60, H * 0.4)) for (let t = y - run; t < y; t++) ink[t * W + x] = 2;
+        run = 0;
+      }
+    }
+    for (let i = 0; i < W * H; i++) { const v = ink[i] === 1 ? 0 : 255; px[i * 4] = px[i * 4 + 1] = px[i * 4 + 2] = v; px[i * 4 + 3] = 255; }
+    ctx.putImageData(d, 0, 0);
+    return cv;
   }
 
   return { parse, summary, shrink, ocr, cleanOcr };
