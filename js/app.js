@@ -818,6 +818,22 @@
         이번 달 <b>${I.thisMonth.courses}곳</b>에서 ${I.thisMonth.n}라운드 ·
         ${I.daysSinceLast > 0 ? `마지막 라운드 <b>${I.daysSinceLast}일 전</b>` : I.daysSinceLast === 0 ? `마지막 라운드 <b>오늘</b>` : `다음 라운드 <b>${-I.daysSinceLast}일 뒤</b>`}
       </div>
+      <h2>다녀온 지역 <span class="muted">시·도별 골프장 수 · 누르면 골프장 목록</span></h2>
+      <div class="card">
+        ${(() => {
+          const RS = Regions.summarize(A.rs, settings);
+          const lv = (n) => (!n ? "l0" : n <= 2 ? "l1" : n <= 5 ? "l2" : "l3");
+          const tile = ([name, c, r]) => { const x = RS[name]; const n = x ? x.courses.length : 0;
+            return `<button type="button" class="ktile ${lv(n)}" style="grid-column:${c + 1};grid-row:${r + 1}" data-reg="${name}" ${n ? "" : "disabled"}><b>${name}</b><span>${n ? n + "곳" : "-"}</span>${n ? `<small>${x.rounds}회</small>` : ""}</button>`; };
+          const extra = ["해외", "미지정"].filter((k) => RS[k]).map((k) => `<button type="button" class="chip" data-reg="${k}">${k} ${RS[k].courses.length}곳</button>`).join(" ");
+          const regs = Object.keys(RS).filter((k) => k !== "미지정");
+          return `<div class="kmap-wrap"><div class="kmap">${Regions.TILES.map(tile).join("")}</div>
+            <div class="kmap-side"><div class="kmap-total"><b>${regs.length}</b>개 지역 · <b>${S.sum(Object.values(RS).map((x) => x.courses.length))}</b>곳 골프장</div>${extra ? `<div class="row" style="margin-top:8px">${extra}</div>` : ""}
+            ${RS["미지정"] ? `<p class="legend-note">지역을 모르는 골프장은 「미지정」입니다. <a href="#/settings">설정 → 골프장 지역</a>에서 정해 주세요.</p>` : ""}</div></div>
+            <div id="regionPanel"></div>`;
+        })()}
+      </div>
+
       <h2>라운드 패턴</h2>
       <div class="kpis">
         ${kpi("평균 라운드 간격", isNum(I.avgGap) ? I.avgGap.toFixed(0) + "일" : "-", "라운드 사이 평균 일수")}
@@ -830,6 +846,21 @@
       ${I.d90.list.length ? `<div class="tbl-wrap"><table><thead><tr><th>날짜</th><th class="l">골프장</th><th>타수</th><th>오버</th></tr></thead>
         <tbody>${I.d90.list.map((r) => `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}${r.time ? " " + esc(r.time) : ""}</td><td class="l">${esc(r.course)}</td><td><b>${r.strokes ?? "-"}</b></td><td>${sgn(r.over, 0)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">최근 90일 라운드가 없습니다.</p>`}`;
     app.querySelectorAll("tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
+    // 지역 타일을 누르면 그 지역 골프장 목록
+    const RS = Regions.summarize(A.rs, settings);
+    const showRegion = (reg) => {
+      const x = RS[reg];
+      app.querySelectorAll("[data-reg]").forEach((b) => b.classList.toggle("sel", b.dataset.reg === reg));
+      if (!x) { document.getElementById("regionPanel").innerHTML = ""; return; }
+      document.getElementById("regionPanel").innerHTML = `<div class="region-panel"><div class="region-head">📍 ${reg} <span class="muted">골프장 ${x.courses.length}곳 · ${x.rounds}라운드</span></div>
+        <div class="tbl-wrap"><table><thead><tr><th class="l">골프장</th><th>방문</th><th>18홀 평균</th><th>베스트</th><th>최근 방문</th><th>최근 점수</th></tr></thead>
+        <tbody>${x.courses.map((c) => `<tr class="click" data-course="${esc(c.course)}"><td class="l"><b>${esc(c.course)}</b>${Regions.of(c.course, settings).guess ? ` <span class="pill">추정</span>` : ""}</td><td>${c.n}</td><td>${f1(c.avg)}</td><td>${c.best ?? "-"}</td><td>${dot(c.last)}</td><td>${c.lastScore ?? "-"}</td></tr>`).join("")}</tbody></table></div>
+        <p class="legend-note">골프장을 누르면 그 골프장 라운드만 라운드 목록에서 봅니다.</p></div>`;
+      document.querySelectorAll("#regionPanel [data-course]").forEach((tr) => (tr.onclick = () => { F.course = tr.dataset.course; ls.set(KEY_FILTER, F); location.hash = "#/rounds"; }));
+    };
+    app.querySelectorAll("[data-reg]").forEach((b) => (b.onclick = () => showRegion(b.dataset.reg)));
+    const top = Object.entries(RS).filter(([k]) => k !== "미지정").sort((a, b) => b[1].courses.length - a[1].courses.length)[0];
+    if (top) showRegion(top[0]);
     chart("cDow", { type: "bar", data: { labels: I.dow.map((d) => d.l), datasets: [{ data: I.dow.map((d) => d.n), backgroundColor: I.dow.map((d, i) => (i === 0 || i === 6 ? "#ff8f8f" : "#7fd1ae")) }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ticks: { precision: 0 }, ...noGrid }, x: noGrid } }), plugins: [valueLabels((v) => v)] });
   }
 
@@ -1055,6 +1086,12 @@
       <div class="row" style="margin-top:10px"><button class="btn" id="bSaveClubs" type="button" ${G.canWrite() ? "" : "disabled"}>클럽 거리 GitHub에 저장</button><button class="btn ghost" id="bClubDefault" type="button">예시값으로</button></div>
       <p class="legend-note">저장하면 라운드 입력의 <b>공략 가이드</b>와 상세 분석 <b>⑨ 예상 어프로치 클럽별</b>에 쓰입니다. 안 쓰는 클럽은 「사용」을 끄세요.</p>
 
+      <h2>골프장 지역 <span class="muted">인사이트 → 다녀온 지역에 쓰임</span></h2>
+      <div class="tbl-wrap"><table><thead><tr><th class="l">골프장</th><th>지역</th><th class="l">상태</th></tr></thead>
+        <tbody>${[...new Set(rounds.map((x) => x.course))].sort().map((c, i) => { const o = Regions.of(c, settings); return `<tr><td class="l">${esc(c)}</td><td><select data-reg-course="${esc(c)}" data-init="${o.region}">${[...Regions.NAMES, "미지정"].map((n) => `<option ${n === o.region ? "selected" : ""}>${n}</option>`).join("")}</select></td><td class="l">${o.custom ? `<span class="pill ok">직접 지정</span>` : o.guess ? `<span class="pill ng">추정 — 확인해 주세요</span>` : o.region === "미지정" ? `<span class="pill ng">미지정</span>` : `<span class="muted">기본값</span>`}</td></tr>`; }).join("")}</tbody></table></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="bSaveReg" type="button" ${G.canWrite() ? "" : "disabled"}>골프장 지역 GitHub에 저장</button></div>
+      <p class="legend-note">기본값은 제가 아는 범위로 넣은 것이고, 「추정」은 확실하지 않은 곳입니다. 바꾼 지역만 저장해도 되고 그대로 두면 기본값을 씁니다.</p>
+
       <h2>버전 <span class="muted">v${APP_VERSION}</span></h2>
       <div class="card">${APP_CHANGES.map((c) => `<h3 class="mt0">v${c.v} <span class="muted">${c.date}</span></h3><ul>${c.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")}
         <p class="legend-note">이전 버전 화면 보기(읽기 전용): ${APP_CHANGES.filter((c) => c.v !== APP_VERSION).map((c) => `<a href="v${c.v}/" target="_blank" rel="noopener">v${c.v}</a>`).join(" · ")} — 주소 뒤에 <code>/v1.0</code>처럼 붙여도 됩니다.</p>
@@ -1138,6 +1175,22 @@
       toast("드라이버 거리를 바꿨습니다. 「클럽 거리 GitHub에 저장」을 눌러야 저장됩니다.", 4000);
     };
     drawGaps();
+    $("bSaveReg").onclick = async () => {
+      // 화면에서 바꾼 골프장만 '직접 지정'으로 저장한다(안 건드린 추정값은 추정으로 남긴다)
+      const reg = { ...(settings.regions || {}) };
+      app.querySelectorAll("[data-reg-course]").forEach((sel) => {
+        const c = sel.dataset.regCourse;
+        if (sel.value === sel.dataset.init) return;
+        if (sel.value === "미지정") delete reg[c];
+        else reg[c] = sel.value;
+      });
+      settings.regions = reg;
+      try {
+        const { mirrorErrors } = await G.update(() => settings, "골프장 지역 변경", G.SETTINGS || "data/settings.json");
+        toast(mirrorErrors.length ? "저장했지만 동기화 실패: " + mirrorErrors.join(" / ") : "골프장 지역을 저장했습니다.", 4000);
+        settingsView();
+      } catch (e) { toast(e.message, 6000); }
+    };
     $("bSaveClubs").onclick = async () => {
       settings.clubs = readClubs();
       try {
