@@ -711,11 +711,23 @@
     return added;
   }
 
+  // 동반자 한 명의 18홀 타수 입력칸(전반·후반 두 줄). 칸 위에 Par를 보여 줘 타수로 적기 쉽게 한다.
+  const hsumText = (sm) => `전반 <b>${sm.front ?? "-"}</b> · 후반 <b>${sm.back ?? "-"}</b> · 합계 <b>${sm.total ?? "-"}</b>${isNum(sm.over) ? ` (${sgn(sm.over, 0)})` : ""} · 입력 ${sm.holeCount}홀`;
+  function holeGrid(c, i) {
+    const hm = Object.fromEntries((c.holes || []).map((x) => [x.h, x.st]));
+    const pars = holeGrid.pars || {};
+    const half = (a, label) => `<div class="tbl-wrap card-tbl"><table class="hgrid"><thead><tr><th class="l">${label}</th>${Array.from({ length: 9 }, (_, k) => `<th>${a + k}${isNum(pars[a + k]) ? `<br><span class="muted">P${pars[a + k]}</span>` : ""}</th>`).join("")}</tr></thead>
+      <tbody><tr><th class="l">타수</th>${Array.from({ length: 9 }, (_, k) => `<td><input data-hs="${i}" data-h="${a + k}" type="number" inputmode="numeric" min="1" max="15" value="${hm[a + k] ?? ""}"></td>`).join("")}</tr></tbody></table></div>`;
+    return `<div class="hgrid-box"><div class="hgrid-head">✏️ <b>${esc(c.name) || "새 동반자"}</b> 홀별 타수 <span class="muted">(Par 대비가 아니라 친 타수 — 예: 파4 보기면 5)</span></div>
+      ${half(1, "전반")}${half(10, "후반")}<p class="legend-note" data-hsum>${hsumText(Companions.summary(c, pars))}</p></div>`;
+  }
+
   /* 동반자·사진 편집기. st = { comps, photos: [{path} | {dataUrl, b64}], removed: [지울 사진 경로], text: 붙여넣기 칸 }
    * 저장은 부르는 쪽에서 한다(라운드 상세는 바로, 붙여넣기 등록은 라운드를 등록할 때). */
   function companionEditor(box, st, pars, onChange = () => {}) {
     const changed = () => { onChange(); draw(); };
     function draw() {
+      holeGrid.pars = pars;
       const bad = st.comps.some((c) => c.name.includes("*"));
       box.innerHTML = `
         <div class="tbl-wrap"><table><thead><tr><th class="l">이름(별명)</th><th>전반</th><th>후반</th><th>총타수</th><th>홀 기록</th><th></th></tr></thead>
@@ -724,10 +736,11 @@
           const warn = (c.warnings || []).filter((w) => !w.startsWith("이름에"));
           return `<tr><td class="l"><input data-cn="${i}" value="${esc(c.name)}" placeholder="예: 철수, A" class="${c.name.includes("*") || !c.name.trim() ? "warn" : ""}" style="width:130px">${c.orig && c.orig !== c.name ? `<br><span class="muted">원문 ${esc(c.orig)}</span>` : ""}${warn.length ? `<br><span class="ng">${esc(warn.join(" / "))}</span>` : ""}</td>
             ${["front", "back", "total"].map((k) => (hasH ? `<td>${s[k] ?? "-"}</td>` : `<td><input data-cv="${i}" data-k="${k}" type="number" inputmode="numeric" value="${isNum(c[k]) ? c[k] : ""}" style="width:64px"></td>`)).join("")}
-            <td>${hasH ? s.holeCount + "홀" : "-"}</td><td><button class="link" data-cdel="${i}" type="button">삭제</button></td></tr>`;
+            <td>${hasH ? s.holeCount + "홀" : "-"}<br><button class="link" data-hopen="${i}" type="button">${st.openH === i ? "입력 닫기" : hasH ? "홀 점수 수정" : "홀 점수 입력"}</button></td><td><button class="link" data-cdel="${i}" type="button">삭제</button></td></tr>`;
         }).join("") : `<tr><td colspan="6" class="muted">아직 동반자가 없습니다.</td></tr>`}</tbody></table></div>
         <p class="legend-note${bad ? " ng" : ""}">${bad ? "이름 가운데 <b>*</b>가 있는 동반자는 이름을 고쳐 주세요. " : ""}저장소가 공개라 실명 대신 <b>별명·이니셜</b>을 권장합니다. *가 있던 이름을 고치면 이 기기에 기억해 두었다가 다음 붙여넣기 때 자동으로 바꿉니다.</p>
-        <div class="row" style="margin-top:6px"><button class="btn ghost" data-act="add" type="button">+ 스코어만 추가</button></div>
+        ${isNum(st.openH) && st.comps[st.openH] ? holeGrid(st.comps[st.openH], st.openH) : ""}
+        <div class="row" style="margin-top:6px"><button class="btn ghost" data-act="addH" type="button">+ 홀별로 직접 추가</button><button class="btn ghost" data-act="add" type="button">+ 스코어만 추가</button></div>
         <h4>붙여넣기로 추가</h4>
         <textarea class="pastebox small" data-act="text" placeholder="한 줄에 한 명. 예)&#10;철수 85&#10;영희 42 45&#10;홍*동 5 4 6 5 4 5 3 5 6 4 5 4 6 5 4 3 5 6&#10;(타수 또는 +/-, 끝에 합계 칸이 있어도 됩니다)">${esc(st.text)}</textarea>
         <div class="row" style="margin-top:6px"><button class="btn ghost" data-act="parse" type="button">읽어서 추가</button></div>
@@ -748,6 +761,21 @@
       box.querySelectorAll("[data-cv]").forEach((el) => (el.onchange = () => { st.comps[el.dataset.cv][el.dataset.k] = el.value === "" ? null : Number(el.value); onChange(); }));
       box.querySelectorAll("[data-cdel]").forEach((el) => (el.onclick = () => { st.comps.splice(Number(el.dataset.cdel), 1); changed(); }));
       box.querySelectorAll("[data-pdel]").forEach((el) => (el.onclick = () => { const [p] = st.photos.splice(Number(el.dataset.pdel), 1); if (p.path) st.removed.push(p.path); changed(); }));
+      q('[data-act="addH"]').onclick = () => { st.comps.push({ name: "", front: null, back: null, total: null, holes: [] }); st.openH = st.comps.length - 1; changed(); setTimeout(() => box.querySelector(`[data-cn="${st.openH}"]`)?.focus(), 0); };
+      box.querySelectorAll("[data-hopen]").forEach((b) => (b.onclick = () => { const i = Number(b.dataset.hopen); st.openH = st.openH === i ? null : i; draw(); }));
+      // 홀 점수 칸: 입력할 때마다 기록만 바꾸고 합계 글자만 고친다(다시 그리면 입력 중인 칸의 커서가 사라짐)
+      box.querySelectorAll("[data-hs]").forEach((el) => (el.oninput = () => {
+        const c = st.comps[Number(el.dataset.hs)], h = Number(el.dataset.h), v = el.value === "" ? null : Number(el.value);
+        c.holes = (c.holes || []).filter((x) => x.h !== h);
+        if (isNum(v) && v > 0) c.holes.push({ h, st: v });
+        c.holes.sort((a, b) => a.h - b.h);
+        c.warnings = (c.warnings || []).filter((w) => w.startsWith("이름"));
+        const sm = Companions.summary(c, pars);
+        const t = box.querySelector("[data-hsum]");
+        if (t) t.innerHTML = hsumText(sm);
+        el.classList.toggle("warn", isNum(v) && (v < 1 || v > 15));
+        onChange();
+      }));
       q('[data-act="add"]').onclick = () => { st.comps.push({ name: "", front: null, back: null, total: null, holes: [] }); changed(); };
       q('[data-act="text"]').oninput = (e) => (st.text = e.target.value);
       q('[data-act="ocr"]').onchange = (e) => (st.ocr = e.target.checked);
