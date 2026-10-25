@@ -111,7 +111,8 @@ const SmartScore = (() => {
       else if (holes.length !== 18) warnings.push(`${holes.length}홀만 읽었습니다`);
       if (statedTotal !== null && total !== null && statedTotal !== total) warnings.push(`총타수 불일치(표기 ${statedTotal}, 계산 ${total})`);
       const distCount = holes.filter((h) => h.dist).length;
-      rounds.push({ date, time: time || "", course: course.trim(), front: parts[0] || "", back: parts[1] || "", tee, distCount, statedTotal, total, holes, warnings });
+      // block: 이 라운드 부분의 원문 — 동반자 줄(「이름 숫자…」)은 Companions.parse가 따로 읽는다
+      rounds.push({ date, time: time || "", course: course.trim(), front: parts[0] || "", back: parts[1] || "", tee, distCount, statedTotal, total, holes, warnings, block: lines.slice(di + 1, end).join("\n") });
     });
     return rounds;
   }

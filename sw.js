@@ -4,7 +4,7 @@
  * 앱이 「새 버전이 있습니다 — 지금 적용」 줄을 띄워 바로 바꿀 수 있게 한다(js/app.js). */
 importScripts("js/version.js");   // APP_VERSION — 버전을 올리면 캐시 이름이 바뀌어 새 버전이 설치된다
 const CACHE = "lounge-shell-" + APP_VERSION;
-const SHELL = ["./", "index.html", "js/version.js", "css/style.css", "js/github.js", "js/stats.js", "js/clubs.js", "js/korea-map.js", "js/regions.js", "js/smartscore.js", "js/guide.js", "js/app.js", "manifest.webmanifest", "icons/icon-192.png",
+const SHELL = ["./", "index.html", "js/version.js", "css/style.css", "js/github.js", "js/stats.js", "js/clubs.js", "js/korea-map.js", "js/regions.js", "js/smartscore.js", "js/companions.js", "js/guide.js", "js/app.js", "manifest.webmanifest", "icons/icon-192.png",
   "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"];
 
 self.addEventListener("install", (e) => {

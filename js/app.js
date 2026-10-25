@@ -622,6 +622,184 @@
     return half(1, "전반") + half(10, "후반");
   }
 
+  // ───────────── 동반자·사진 ─────────────
+  // 가려진 이름(홍*동) → 내가 고친 이름. 이 기기에만 기억한다(공개 저장소에는 올리지 않음).
+  const KEY_ALIAS = KEY_DRAFT.split(".")[0] + ".alias.v1";
+  const parsOf = (r) => Object.fromEntries((r.holes || []).filter((h) => isNum(h.par)).map((h) => [h.h, h.par]));
+  function applyAlias(list) {
+    const al = ls.get(KEY_ALIAS) || {};
+    list.forEach((c) => {
+      c.orig = c.name;
+      if (al[c.name]) { c.name = al[c.name]; c.warnings = (c.warnings || []).filter((w) => !w.startsWith("이름에")); }
+    });
+    return list;
+  }
+  // 저장할 모양: 홀 기록이 있으면 홀만(합계는 계산), 없으면 적은 점수만
+  function cleanComp(c) {
+    const o = { name: c.name.trim() };
+    if (c.holes && c.holes.length) o.holes = c.holes.map(({ h, st }) => ({ h, st }));
+    else for (const k of ["front", "back", "total"]) if (isNum(c[k])) o[k] = c[k];
+    return o;
+  }
+  const compProblem = (st) => {
+    if (st.comps.some((c) => !c.name.trim())) return "이름이 빈 동반자가 있습니다.";
+    if (st.comps.some((c) => c.name.includes("*"))) return "이름 가운데 *가 있는 동반자가 있습니다. 이름을 고쳐 주세요.";
+    if (new Set(st.comps.map((c) => c.name.trim())).size !== st.comps.length) return "같은 이름의 동반자가 두 번 있습니다.";
+    return "";
+  };
+  const newEditState = (r) => ({ comps: structuredClone(r.companions || []), photos: (r.photos || []).map((path) => ({ path })), removed: [], text: "" });
+
+  // 라운드 상세의 동반자 비교: 순위표 + (홀 기록이 있으면) 홀별 비교·홀 매치
+  function companionCompare(r) {
+    const comps = r.companions || [];
+    if (!comps.length) return "";
+    const pars = parsOf(r), me = S.round(r);
+    const myHm = Object.fromEntries((r.holes || []).filter((h) => isNum(h.par) && isNum(h.score)).map((h) => [h.h, h.par + h.score]));
+    const P = [{ name: "나", me: true, hm: myHm, front: me.front ?? null, back: me.back ?? null, total: me.full ? me.strokes : null, over: me.full ? me.over : null },
+      ...comps.map((c) => ({ name: c.name, ...Companions.summary(c, pars) }))];
+    const ranked = P.filter((p) => isNum(p.total)).map((p) => p.total).sort((a, b) => a - b);
+    const rank = (p) => (isNum(p.total) ? ranked.indexOf(p.total) + 1 : "-");
+    const diff = (p) => {
+      if (p.me || !isNum(p.total) || !isNum(P[0].total)) return "";
+      const d = p.total - P[0].total;
+      return d > 0 ? `<span class="ok">내가 ${d}타 앞섬</span>` : d < 0 ? `<span class="ng">${-d}타 뒤짐</span>` : "동타";
+    };
+    let html = `<div class="tbl-wrap"><table><thead><tr><th>순위</th><th class="l">이름</th><th>전반</th><th>후반</th><th>총타수</th><th>오버</th><th class="l">나와 비교</th></tr></thead>
+      <tbody>${[...P].sort((a, b) => (isNum(a.total) ? a.total : 999) - (isNum(b.total) ? b.total : 999)).map((p) => `<tr${p.me ? ` class="me-row"` : ""}><td>${rank(p)}</td><td class="l"><b>${esc(p.name)}</b></td><td>${p.front ?? "-"}</td><td>${p.back ?? "-"}</td><td><b>${p.total ?? "-"}</b></td><td>${isNum(p.over) ? sgn(p.over, 0) : "-"}</td><td class="l">${diff(p)}</td></tr>`).join("")}</tbody></table></div>`;
+    const withHoles = P.filter((p) => !p.me && Object.keys(p.hm).length);
+    if (withHoles.length && Object.keys(myHm).length) {
+      const rows = [P[0], ...withHoles];
+      const half = (a, label) => `<div class="tbl-wrap card-tbl" style="margin-top:8px"><table><thead><tr><th class="l">${label}</th>${Array.from({ length: 9 }, (_, i) => `<th>${parMark(pars[a + i])}${a + i}</th>`).join("")}<th>${a === 1 ? "OUT" : "IN"}</th></tr></thead>
+        <tbody><tr><th class="l">Par</th>${Array.from({ length: 9 }, (_, i) => `<td>${pars[a + i] ?? ""}</td>`).join("")}<td>${S.sum(Array.from({ length: 9 }, (_, i) => pars[a + i] || 0)) || ""}</td></tr>
+        ${rows.map((p) => `<tr${p.me ? ` class="me-row"` : ""}><th class="l">${esc(p.name)}</th>${Array.from({ length: 9 }, (_, i) => {
+          const h = a + i, v = p.hm[h], par = pars[h];
+          if (!isNum(v)) return "<td></td>";
+          const best = Math.min(...rows.map((q) => q.hm[h]).filter(isNum));
+          const solo = rows.filter((q) => q.hm[h] === best).length === 1;
+          const d = isNum(par) ? v - par : null;
+          return `<td class="sc-cell ${d === null ? "" : d <= -1 ? "sc-m2" : d === 0 ? "sc-0" : d === 1 ? "sc-1" : d === 2 ? "sc-2" : "sc-3"}${v === best && solo ? " hw" : ""}">${v}</td>`;
+        }).join("")}<td><b>${(() => { const xs = Array.from({ length: 9 }, (_, i) => p.hm[a + i]); return xs.every(isNum) ? S.sum(xs) : ""; })()}</b></td></tr>`).join("")}</tbody></table></div>`;
+      const match = withHoles.map((p) => {
+        let w = 0, l = 0, t = 0;
+        for (let h = 1; h <= 18; h++) { const a = myHm[h], b = p.hm[h]; if (!isNum(a) || !isNum(b)) continue; if (a < b) w++; else if (a > b) l++; else t++; }
+        return `<span class="pill">vs ${esc(p.name)} · 이긴 홀 <b>${w}</b> / 비긴 홀 ${t} / 진 홀 <b>${l}</b></span>`;
+      }).join(" ");
+      html += half(1, "전반") + half(10, "후반") + `<p class="legend-note">숫자는 타수, 색은 Par 대비(초록 파·노랑 보기·주황 더블…). 테두리 칸은 그 홀 단독 1등. ${match}</p>`;
+    }
+    return html;
+  }
+
+  /* 동반자·사진 편집기. st = { comps, photos: [{path} | {dataUrl, b64}], removed: [지울 사진 경로], text: 붙여넣기 칸 }
+   * 저장은 부르는 쪽에서 한다(라운드 상세는 바로, 붙여넣기 등록은 라운드를 등록할 때). */
+  function companionEditor(box, st, pars, onChange = () => {}) {
+    const changed = () => { onChange(); draw(); };
+    function draw() {
+      const bad = st.comps.some((c) => c.name.includes("*"));
+      box.innerHTML = `
+        <div class="tbl-wrap"><table><thead><tr><th class="l">이름(별명)</th><th>전반</th><th>후반</th><th>총타수</th><th>홀 기록</th><th></th></tr></thead>
+        <tbody>${st.comps.length ? st.comps.map((c, i) => {
+          const s = Companions.summary(c, pars), hasH = (c.holes || []).length > 0;
+          const warn = (c.warnings || []).filter((w) => !w.startsWith("이름에"));
+          return `<tr><td class="l"><input data-cn="${i}" value="${esc(c.name)}" placeholder="예: 철수, A" class="${c.name.includes("*") || !c.name.trim() ? "warn" : ""}" style="width:130px">${c.orig && c.orig !== c.name ? `<br><span class="muted">원문 ${esc(c.orig)}</span>` : ""}${warn.length ? `<br><span class="ng">${esc(warn.join(" / "))}</span>` : ""}</td>
+            ${["front", "back", "total"].map((k) => (hasH ? `<td>${s[k] ?? "-"}</td>` : `<td><input data-cv="${i}" data-k="${k}" type="number" inputmode="numeric" value="${isNum(c[k]) ? c[k] : ""}" style="width:64px"></td>`)).join("")}
+            <td>${hasH ? s.holeCount + "홀" : "-"}</td><td><button class="link" data-cdel="${i}" type="button">삭제</button></td></tr>`;
+        }).join("") : `<tr><td colspan="6" class="muted">아직 동반자가 없습니다.</td></tr>`}</tbody></table></div>
+        <p class="legend-note${bad ? " ng" : ""}">${bad ? "이름 가운데 <b>*</b>가 있는 동반자는 이름을 고쳐 주세요. " : ""}저장소가 공개라 실명 대신 <b>별명·이니셜</b>을 권장합니다. *가 있던 이름을 고치면 이 기기에 기억해 두었다가 다음 붙여넣기 때 자동으로 바꿉니다.</p>
+        <div class="row" style="margin-top:6px"><button class="btn ghost" data-act="add" type="button">+ 스코어만 추가</button></div>
+        <h4>붙여넣기로 추가</h4>
+        <textarea class="pastebox small" data-act="text" placeholder="한 줄에 한 명. 예)&#10;철수 85&#10;영희 42 45&#10;홍*동 5 4 6 5 4 5 3 5 6 4 5 4 6 5 4 3 5 6&#10;(타수 또는 +/-, 끝에 합계 칸이 있어도 됩니다)">${esc(st.text)}</textarea>
+        <div class="row" style="margin-top:6px"><button class="btn ghost" data-act="parse" type="button">읽어서 추가</button></div>
+        <h4>사진</h4>
+        <div class="row"><label class="btn ghost filebtn">📷 사진 선택<input type="file" accept="image/*" multiple data-act="file" hidden></label>
+          <label class="chk"><input type="checkbox" data-act="ocr" ${st.ocr === false ? "" : "checked"}> 사진에서 점수 읽기</label>
+          <label class="chk"><input type="checkbox" data-act="keep" ${st.keep === false ? "" : "checked"}> 라운드에 사진 저장</label></div>
+        <p class="legend-note">점수 읽기는 사진 속 글자를 <b>이 기기에서</b> 읽어 위 붙여넣기 칸에 넣습니다(처음 한 번 인식 데이터를 받느라 시간이 걸림). 손글씨·흐린 사진은 틀리기 쉬우니 확인·수정한 뒤 「읽어서 추가」를 누르세요. 저장한 사진은 공개 저장소에 올라가며, 촬영 위치 등 사진 속 정보는 지우고 올립니다.</p>
+        <div class="ocr-msg" data-act="msg"></div>
+        ${st.photos.length ? `<div class="photos">${st.photos.map((p, i) => `<div class="ph"><img src="${p.dataUrl || G.rawUrl(p.path)}" alt="사진 ${i + 1}">${p.dataUrl ? `<span class="ph-new">저장 전</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}`;
+      const q = (s) => box.querySelector(s);
+      box.querySelectorAll("[data-cn]").forEach((el) => (el.onchange = () => {
+        const c = st.comps[el.dataset.cn], v = el.value.trim();
+        c.name = v;
+        if (c.orig && c.orig.includes("*") && v && !v.includes("*")) { const al = ls.get(KEY_ALIAS) || {}; al[c.orig] = v; ls.set(KEY_ALIAS, al); }
+        changed();
+      }));
+      box.querySelectorAll("[data-cv]").forEach((el) => (el.onchange = () => { st.comps[el.dataset.cv][el.dataset.k] = el.value === "" ? null : Number(el.value); onChange(); }));
+      box.querySelectorAll("[data-cdel]").forEach((el) => (el.onclick = () => { st.comps.splice(Number(el.dataset.cdel), 1); changed(); }));
+      box.querySelectorAll("[data-pdel]").forEach((el) => (el.onclick = () => { const [p] = st.photos.splice(Number(el.dataset.pdel), 1); if (p.path) st.removed.push(p.path); changed(); }));
+      q('[data-act="add"]').onclick = () => { st.comps.push({ name: "", front: null, back: null, total: null, holes: [] }); changed(); };
+      q('[data-act="text"]').oninput = (e) => (st.text = e.target.value);
+      q('[data-act="ocr"]').onchange = (e) => (st.ocr = e.target.checked);
+      q('[data-act="keep"]').onchange = (e) => (st.keep = e.target.checked);
+      q('[data-act="parse"]').onclick = () => {
+        const got = applyAlias(Companions.parse(st.text, pars));
+        if (!got.length) { toast("동반자 점수를 찾지 못했습니다. '이름 점수' 모양으로 적어 주세요."); return; }
+        for (const c of got) { const i = st.comps.findIndex((x) => x.name === c.name); if (i >= 0) st.comps[i] = c; else st.comps.push(c); }
+        st.text = "";
+        toast(`동반자 ${got.length}명을 읽었습니다.`);
+        changed();
+      };
+      q('[data-act="file"]').onchange = async (e) => {
+        const files = [...e.target.files];
+        const msg = q('[data-act="msg"]');
+        for (const f of files) {
+          try {
+            if (st.keep !== false) { st.photos.push(await Companions.shrink(f)); onChange(); }
+            if (st.ocr !== false) {
+              msg.innerHTML = `<div class="notice">사진에서 글자 읽는 중… <span data-p>0%</span></div>`;
+              const text = await Companions.ocr(f, (s, p) => { const el = msg.querySelector("[data-p]"); if (el) el.textContent = `${s} ${Math.round(p * 100)}%`; });
+              st.text = (st.text ? st.text + "\n" : "") + text;
+            }
+          } catch (err) { toast(err.message || String(err), 6000); }
+        }
+        draw();
+        if (st.ocr !== false && files.length) q('[data-act="msg"]').innerHTML = `<div class="notice">읽은 글자를 붙여넣기 칸에 넣었습니다. 이름·숫자를 확인하고 필요 없는 줄은 지운 뒤 「읽어서 추가」를 누르세요.</div>`;
+      };
+    }
+    draw();
+  }
+
+  // 새 사진을 올리고 경로 목록을 돌려준다(라운드 기록에는 경로만 저장)
+  async function uploadPhotos(st, id, what) {
+    const errs = [];
+    for (const [i, p] of st.photos.entries()) {
+      if (p.path) continue;
+      const path = `${G.DATA_DIR}/photos/${id}-${Date.now().toString(36)}${i}.jpg`;
+      errs.push(...(await G.putFile(path, p.b64, `사진 추가: ${what}`)));
+      p.path = path;
+      delete p.b64;
+    }
+    return { paths: st.photos.map((p) => p.path), errs };
+  }
+  async function saveCompanions(r, st) {
+    const what = `${r.date} ${r.course}`;
+    const { paths, errs } = await uploadPhotos(st, r.id, what);
+    const comps = st.comps.map(cleanComp);
+    await commit((data) => data.map((x) => (x.id === r.id ? { ...x, companions: comps.length ? comps : undefined, photos: paths.length ? paths : undefined } : x)), `동반자·사진 저장: ${what}`);
+    for (const p of st.removed) await G.deleteFile(p, `사진 삭제: ${what}`).catch(() => null);
+    if (errs.length) toast("사진은 저장했지만 다른 저장소 동기화 실패: " + errs.join(" / "), 6000);
+  }
+
+  // 인사이트: 동반자별 전적(18홀 총타수끼리 비교)
+  function companionRecords(list) {
+    const m = new Map();
+    for (const r of list) {
+      if (!r.companions) continue;
+      const me = S.round(r), pars = parsOf(r);
+      for (const c of r.companions) {
+        const s = Companions.summary(c, pars);
+        const x = m.get(c.name) || { name: c.name, n: 0, w: 0, l: 0, t: 0, mine: [], theirs: [], last: "" };
+        x.n++;
+        if (r.date > x.last) x.last = r.date;
+        if (me.full && isNum(s.total)) {
+          x.mine.push(me.strokes); x.theirs.push(s.total);
+          if (me.strokes < s.total) x.w++; else if (me.strokes > s.total) x.l++; else x.t++;
+        }
+        m.set(c.name, x);
+      }
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n || (a.last < b.last ? 1 : -1));
+  }
+
   // ───────────── 라운드 목록·상세 ─────────────
   function roundsView() {
     const list = S.byRecent(frounds());
@@ -665,6 +843,11 @@
             <tbody>${Object.entries(settings.radar).map(([k, c]) => `<tr><td class="l"><b>${c.label}</b><br><span class="muted">${c.metric}</span></td><td>${rawFmt(k, R1.raw[k])}</td><td class="${isNum(rad[k]) ? (rad[k] >= settings.radarTarget ? "ok" : "ng") : ""}"><b>${rad[k] ?? "-"}</b></td><td class="muted">${rawFmt(k, c.full)}</td></tr>`).join("")}</tbody></table></div>
         </div>
         <p class="legend-note">이 라운드 <b>한 경기만</b>의 지표를 점수로 바꾼 것입니다(홈의 육각형은 최근 5라운드 평균이라 한 경기보다 덜 들쭉날쭉합니다). 주황 점선은 목표선 ${settings.radarTarget}점, 표의 「100점 기준」이 그 목표에 해당하는 실제 값입니다.</p></div>` : ""}
+      <h3>동반자 비교 <span class="muted">${(r.companions || []).length ? (r.companions || []).length + "명" : "없음"}</span></h3>
+      ${companionCompare(r) || `<p class="muted">함께 친 동반자의 점수를 넣으면 순위·홀별로 비교합니다.</p>`}
+      ${(r.photos || []).length ? `<div class="photos view">${r.photos.map((p, i) => `<a class="ph" href="${G.rawUrl(p)}" target="_blank" rel="noopener"><img src="${G.rawUrl(p)}" alt="라운드 사진 ${i + 1}" loading="lazy"></a>`).join("")}</div>` : ""}
+      <div class="row" style="margin-top:10px"><button class="btn ghost" id="bComp" type="button">👥 동반자·사진 ${(r.companions || []).length || (r.photos || []).length ? "편집" : "추가"}</button></div>
+      <div id="compBox"></div>
       <div id="delBox"></div>
       <p><a href="#/rounds">← 목록으로</a></p>`;
     if (s.detail) {
@@ -690,6 +873,22 @@
         }],
       });
     }
+    document.getElementById("bComp").onclick = () => {
+      const box = document.getElementById("compBox");
+      const st = newEditState(r);
+      box.innerHTML = `<div class="card" style="margin-top:10px"><h3 class="mt0">동반자·사진 편집</h3><div id="compEd"></div>
+        <div class="row" style="margin-top:12px"><button class="btn" id="bCompSave" type="button" ${G.canWrite() ? "" : "disabled"}>GitHub에 저장</button><button class="btn ghost" id="bCompCancel" type="button">닫기</button></div></div>`;
+      companionEditor(document.getElementById("compEd"), st, parsOf(r));
+      document.getElementById("bCompCancel").onclick = () => (box.innerHTML = "");
+      document.getElementById("bCompSave").onclick = async (e) => {
+        const bad = compProblem(st);
+        if (bad) { toast(bad, 4000); return; }
+        e.target.disabled = true; e.target.textContent = "저장 중…";
+        try { await saveCompanions(r, st); toast("동반자·사진을 저장했습니다."); roundView(id); }
+        catch (err) { toast(err.message, 6000); e.target.disabled = false; e.target.textContent = "GitHub에 저장"; }
+      };
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     document.getElementById("bDel").onclick = () => {
       document.getElementById("delBox").innerHTML = `<div class="notice">이 라운드를 GitHub에서 삭제할까요? <button class="btn danger" id="bDel2" type="button">삭제 확인</button></div>`;
       document.getElementById("bDel2").onclick = async () => {
@@ -840,6 +1039,15 @@
         })()}
       </div>
 
+      ${(() => {
+        const CR = companionRecords(fr);
+        if (!CR.length) return "";
+        return `<h2>동반자 전적 <span class="muted">18홀 총타수 비교 · 이름을 고치면 모든 라운드에 반영</span></h2>
+        <div class="tbl-wrap"><table><thead><tr><th class="l">동반자</th><th>함께</th><th>나의 승-패-무</th><th>내 평균</th><th>동반자 평균</th><th>평균 차</th><th>최근</th><th></th></tr></thead>
+        <tbody>${CR.map((x, i) => { const d = x.mine.length ? S.avg(x.theirs) - S.avg(x.mine) : null; return `<tr><td class="l"><b>${esc(x.name)}</b>${x.name.includes("*") ? ` <span class="pill ng">이름 확인</span>` : ""}</td><td>${x.n}회</td><td>${x.mine.length ? `<b>${x.w}</b>-${x.l}-${x.t}` : "-"}</td><td>${f1(S.avg(x.mine))}</td><td>${f1(S.avg(x.theirs))}</td><td class="${isNum(d) ? (d > 0 ? "ok" : d < 0 ? "ng" : "") : ""}">${isNum(d) ? (d > 0 ? `내가 ${d.toFixed(1)}타 앞섬` : d < 0 ? `${(-d).toFixed(1)}타 뒤짐` : "같음") : "-"}</td><td>${dot(x.last)}</td><td><button class="link" data-rename="${i}" type="button" ${G.canWrite() ? "" : "disabled"}>이름 고치기</button></td></tr>`; }).join("")}</tbody></table></div>
+        <div id="renameBox"></div>`;
+      })()}
+
       <h2>라운드 패턴</h2>
       <div class="kpis">
         ${kpi("평균 라운드 간격", isNum(I.avgGap) ? I.avgGap.toFixed(0) + "일" : "-", "라운드 사이 평균 일수")}
@@ -867,11 +1075,31 @@
     app.querySelectorAll("[data-reg]").forEach((b) => (b.onclick = () => showRegion(b.dataset.reg)));
     const top = Object.entries(RS).filter(([k]) => k !== "미지정").sort((a, b) => b[1].courses.length - a[1].courses.length)[0];
     if (top) showRegion(top[0]);
+    // 동반자 이름 고치기: 그 이름이 들어간 모든 라운드를 한 번에 바꾼다
+    const CR = companionRecords(rounds);
+    const CRf = companionRecords(fr);
+    app.querySelectorAll("[data-rename]").forEach((b) => (b.onclick = () => {
+      const old = CRf[b.dataset.rename].name;
+      document.getElementById("renameBox").innerHTML = `<div class="notice" style="margin-top:8px">「${esc(old)}」 → <input id="rnNew" value="${esc(old)}" style="width:140px"> <button class="btn" id="rnGo" type="button">모든 라운드에서 바꾸기</button> <span class="muted">${(CR.find((x) => x.name === old) || { n: 0 }).n}개 라운드</span></div>`;
+      document.getElementById("rnGo").onclick = async () => {
+        const nv = document.getElementById("rnNew").value.trim();
+        if (!nv || nv === old) return;
+        if (nv.includes("*")) { toast("*를 빼고 적어 주세요."); return; }
+        try {
+          await commit((data) => data.map((r) => (r.companions && r.companions.some((c) => c.name === old) && !r.companions.some((c) => c.name === nv) ? { ...r, companions: r.companions.map((c) => (c.name === old ? { ...c, name: nv } : c)) } : r)), `동반자 이름 변경: ${old} → ${nv}`);
+          if (old.includes("*")) { const al = ls.get(KEY_ALIAS) || {}; al[old] = nv; ls.set(KEY_ALIAS, al); }
+          toast("이름을 바꿨습니다.");
+          insightsView();
+        } catch (e) { toast(e.message, 6000); }
+      };
+    }));
     chart("cDow", { type: "bar", data: { labels: I.dow.map((d) => d.l), datasets: [{ data: I.dow.map((d) => d.n), backgroundColor: I.dow.map((d, i) => (i === 0 || i === 6 ? "#ff8f8f" : "#7fd1ae")) }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ticks: { precision: 0 }, ...noGrid }, x: noGrid } }), plugins: [valueLabels((v) => v)] });
   }
 
   // ───────────── 스마트스코어 붙여넣기 등록 ─────────────
   let parsed = [];
+  let compIdx = -1;
+  const compLabel = (r) => `${r.st.comps.length ? `👥 ${r.st.comps.length}명` : "-"}${r.st.photos.length ? ` · 📷 ${r.st.photos.length}` : ""}${r.st.comps.some((c) => c.name.includes("*")) ? ` <span class="pill ng">이름 확인</span>` : ""}`;
   function importView() {
     const known = [...new Set(rounds.map((r) => r.course))];
     app.innerHTML = `
@@ -880,6 +1108,7 @@
         <li>네이버 스마트스코어의 라운드 화면(골프장 · 코스 · 날짜 시간 · 총타수 · 홀별 Par/Score)을 복사해 아래에 붙여 넣으세요. 여러 라운드를 한꺼번에 붙여도 됩니다.</li>
         <li>읽은 결과를 확인하고 고칠 수 있습니다. 같은 날짜·골프장이 이미 있으면 기본으로 빼 둡니다.</li>
         <li><b>홀 길이도 넣을 수 있습니다.</b> 스마트스코어 텍스트에는 거리가 없으니, 각 반쪽의 Par/Score 줄 아래에 <code>거리 343 318 314 ...</code>처럼 한 줄을 더 적으세요. 앞에 티 이름을 쓰면(<code>White 343 318 ...</code>) 그 티로 기록되고, <code>Yard 375 ...</code>로 쓰면 m로 바꿔 저장합니다. 18홀을 한 줄에 적어도 됩니다. 거리는 <b>실제로 친 티</b> 기준으로 넣으세요.</li>
+        <li><b>동반자</b>: 붙여 넣은 글에 「이름 숫자…」 줄(예: <code>홍*동 1 0 2 …</code>, <code>철수 85</code>)이 있으면 동반자로 읽습니다. 「추가·편집」에서 스코어만 넣거나, 따로 붙여 넣거나, 스코어카드 사진에서 읽을 수 있고 사진을 라운드에 붙일 수도 있습니다. 이름 가운데 *가 있으면 고쳐 주세요.</li>
         <li>홀별 Par·Score·거리와 티오프 시간이 들어옵니다. 퍼트 등 상세 항목은 등록 뒤 「수정」에서 채우면 됩니다.</li>
       </ul>
       ${G.canWrite() ? "" : `<div class="notice">저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요. 읽기와 확인은 지금도 됩니다.</div>`}
@@ -892,8 +1121,10 @@
       parsed = SmartScore.parse($("ssText").value).map((r) => {
         const course = SmartScore.matchCourse(r.course, known);
         const dup = rounds.some((x) => x.date === r.date && x.course === course);
-        return { ...r, course, origCourse: r.course, dup, pick: !dup && r.holes.length > 0 };
+        const st = { comps: applyAlias(Companions.parse(r.block, parsOf(r), { skipScore: true })), photos: [], removed: [], text: "" };
+        return { ...r, course, origCourse: r.course, dup, pick: !dup && r.holes.length > 0, st };
       });
+      compIdx = -1;
       drawParsed();
     };
     function drawParsed() {
@@ -901,7 +1132,7 @@
       const n = parsed.filter((r) => r.pick).length;
       $("ssOut").innerHTML = `
         <h3>읽은 라운드 <span class="muted">${parsed.length}개 · 등록 대상 ${n}개</span></h3>
-        <div class="tbl-wrap"><table><thead><tr><th>등록</th><th>날짜</th><th class="l">골프장</th><th class="l">코스</th><th class="l">티</th><th>홀</th><th>거리</th><th>총타수</th><th class="l">확인</th></tr></thead>
+        <div class="tbl-wrap"><table><thead><tr><th>등록</th><th>날짜</th><th class="l">골프장</th><th class="l">코스</th><th class="l">티</th><th>홀</th><th>거리</th><th>총타수</th><th>동반자·사진</th><th class="l">확인</th></tr></thead>
         <tbody>${parsed.map((r, i) => `<tr>
           <td><input type="checkbox" data-pick="${i}" ${r.pick ? "checked" : ""} ${r.holes.length ? "" : "disabled"}></td>
           <td>${dot(r.date)}${r.time ? "<br><span class='muted'>" + esc(r.time) + "</span>" : ""}</td>
@@ -911,11 +1142,18 @@
           <td>${r.holes.length}</td>
           <td>${r.distCount ? `${r.distCount}홀` : `<span class="muted">-</span>`}</td>
           <td><b>${r.total ?? "-"}</b>${r.statedTotal !== null && r.statedTotal !== r.total ? `<br><span class="ng">표기 ${r.statedTotal}</span>` : ""}</td>
+          <td><span data-ccount="${i}">${compLabel(r)}</span><br><button class="link" data-cedit="${i}" type="button">${compIdx === i ? "편집 중" : "추가·편집"}</button></td>
           <td class="l">${r.dup ? `<span class="pill ng">이미 있음</span> ` : ""}${r.warnings.length ? `<span class="ng">${esc(r.warnings.join(" / "))}</span>` : `<span class="ok">정상</span>`}</td></tr>`).join("")}</tbody></table></div>
         <datalist id="teeOpts">${["White", "Blue", "Red", "Black", "Gold"].map((t) => `<option value="${t}">`).join("")}</datalist>
         ${parsed.some((r) => r.distCount && !r.tee) ? `<p class="legend-note ng">거리가 있는 라운드는 <b>티</b>를 적어 주세요. 다음에 같은 티로 칠 때 거리를 자동으로 불러올 수 있습니다.</p>` : ""}
         <datalist id="knownCourses">${known.sort().map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
+        ${compIdx >= 0 ? `<div class="card" style="margin-top:12px"><h3 class="mt0">동반자·사진 — ${dot(parsed[compIdx].date)} ${esc(parsed[compIdx].course)}</h3><div id="ssComp"></div></div>` : ""}
         <div class="row" style="margin-top:10px"><button class="btn" id="bImport" type="button" ${G.canWrite() && n ? "" : "disabled"}>선택한 ${n}개 GitHub에 등록</button></div>`;
+      if (compIdx >= 0) {
+        const pr = parsed[compIdx];
+        companionEditor($("ssComp"), pr.st, parsOf(pr), () => { const el = app.querySelector(`[data-ccount="${compIdx}"]`); if (el) el.innerHTML = compLabel(pr); });
+      }
+      app.querySelectorAll("[data-cedit]").forEach((b) => (b.onclick = () => { compIdx = compIdx === Number(b.dataset.cedit) ? -1 : Number(b.dataset.cedit); drawParsed(); if (compIdx >= 0) $("ssComp").scrollIntoView({ behavior: "smooth", block: "start" }); }));
       app.querySelectorAll("[data-pick]").forEach((c) => (c.onchange = () => { parsed[c.dataset.pick].pick = c.checked; drawParsed(); }));
       app.querySelectorAll("[data-tee]").forEach((c) => (c.onchange = () => { parsed[c.dataset.tee].tee = c.value.trim(); drawParsed(); }));
       app.querySelectorAll("[data-course]").forEach((c) => (c.onchange = () => {
@@ -927,10 +1165,20 @@
       const bi = $("bImport");
       if (bi) bi.onclick = async () => {
         const picks = parsed.filter((r) => r.pick);
+        const bad = picks.map((r) => compProblem(r.st) && `${dot(r.date)} ${r.course}: ${compProblem(r.st)}`).find(Boolean);
+        if (bad) { toast(bad, 5000); return; }
         bi.disabled = true;
         bi.textContent = "등록 중…";
-        const objs = picks.map((r, i) => ({ id: "r" + r.date.replaceAll("-", "") + "-" + (Date.now() + i).toString(36), date: r.date, time: r.time, course: r.course, front: r.front, back: r.back, tee: r.tee || "", region: Regions.suggest(r.course, rounds), memo: "스마트스코어 붙여넣기로 등록" + (r.distCount ? ` (거리 ${r.distCount}홀 포함)` : ""), holes: r.holes }));
+        const ids = picks.map((r, i) => "r" + r.date.replaceAll("-", "") + "-" + (Date.now() + i).toString(36));
+        const objs = picks.map((r, i) => ({ id: ids[i], date: r.date, time: r.time, course: r.course, front: r.front, back: r.back, tee: r.tee || "", region: Regions.suggest(r.course, rounds), memo: "스마트스코어 붙여넣기로 등록" + (r.distCount ? ` (거리 ${r.distCount}홀 포함)` : ""), holes: r.holes }));
         try {
+          // 사진을 먼저 올리고, 동반자·사진 경로를 라운드에 붙인다
+          for (const [i, r] of picks.entries()) {
+            const { paths } = await uploadPhotos(r.st, ids[i], `${r.date} ${r.course}`);
+            const comps = r.st.comps.map(cleanComp);
+            if (comps.length) objs[i].companions = comps;
+            if (paths.length) objs[i].photos = paths;
+          }
           await commit((data) => data.concat(objs).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)), `스마트스코어 등록 ${objs.length}건: ${objs.map((o) => o.date + " " + o.course).join(", ")}`.slice(0, 250));
           toast(`${objs.length}개 라운드를 등록했습니다.`);
           parsed = [];

@@ -141,6 +141,36 @@ const GitHubStore = (() => {
     return { data, mirrorErrors };
   }
 
+  /* 사진 같은 바이너리 파일: 기본 저장소와 동기화 저장소 모두에 같은 경로로 올린다(라운드 기록이 경로를 가리키므로).
+   * b64는 파일 내용의 base64. 이미 있으면 덮어쓴다. */
+  async function putFile(path, b64, message) {
+    if (!canWrite()) throw new Error("GitHub 토큰이 없습니다. 설정에서 토큰을 넣어 주세요.");
+    const errors = [];
+    for (const [i, r] of [PRIMARY, ...MIRRORS].entries()) {
+      try {
+        const cur = await fetch(`${apiUrl(r, path)}?ref=${encodeURIComponent(r.branch)}`, { headers: headers(), cache: "no-store" });
+        const sha = cur.ok ? (await cur.json()).sha : undefined;
+        const res = await fetch(apiUrl(r, path), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ message, content: b64, sha, branch: r.branch }) });
+        if (!res.ok) throw new Error(`${label(r)} 사진 저장 실패 (${res.status})`);
+      } catch (e) {
+        if (i === 0) throw e;   // 기본 저장소 실패는 저장 실패
+        errors.push(e.message);
+      }
+    }
+    return errors;
+  }
+  async function deleteFile(path, message) {
+    if (!canWrite()) throw new Error("GitHub 토큰이 없습니다.");
+    for (const r of [PRIMARY, ...MIRRORS]) {
+      const cur = await fetch(`${apiUrl(r, path)}?ref=${encodeURIComponent(r.branch)}`, { headers: headers(), cache: "no-store" }).catch(() => null);
+      if (!cur || !cur.ok) continue;   // 이미 없으면 그대로
+      const { sha } = await cur.json();
+      await fetch(apiUrl(r, path), { method: "DELETE", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ message, sha, branch: r.branch }) }).catch(() => null);
+    }
+  }
+  // 저장소 파일을 브라우저에서 바로 볼 주소(공개 저장소라 토큰 없이 열림, 배포를 기다리지 않음)
+  const rawUrl = (path) => `https://raw.githubusercontent.com/${PRIMARY.owner}/${PRIMARY.repo}/${PRIMARY.branch}/${path}`;
+
   // 동기화 상태: 두 저장소 파일이 같은지 비교
   async function syncStatus() {
     const out = [];
@@ -179,5 +209,5 @@ const GitHubStore = (() => {
     return { ok, msg: (ok ? "모든 저장소 저장 권한 확인됨" : "권한 확인 필요 — ") + " (" + results.join(", ") + ")" };
   }
 
-  return { cfg, setCfg, canWrite, load, update, syncStatus, resync, pending, testToken, PRIMARY, MIRRORS, IS_ORIGIN, ORIGIN, ROUNDS, SETTINGS };
+  return { cfg, setCfg, canWrite, load, update, syncStatus, resync, pending, testToken, putFile, deleteFile, rawUrl, DATA_DIR, PRIMARY, MIRRORS, IS_ORIGIN, ORIGIN, ROUNDS, SETTINGS };
 })();
