@@ -822,12 +822,9 @@
       <div class="card">
         ${(() => {
           const RS = Regions.summarize(A.rs, settings);
-          const lv = (n) => (!n ? "l0" : n <= 2 ? "l1" : n <= 5 ? "l2" : "l3");
-          const tile = ([name, c, r]) => { const x = RS[name]; const n = x ? x.courses.length : 0;
-            return `<button type="button" class="ktile ${lv(n)}" style="grid-column:${c + 1};grid-row:${r + 1}" data-reg="${name}" ${n ? "" : "disabled"}><b>${name}</b><span>${n ? n + "곳" : "-"}</span>${n ? `<small>${x.rounds}회</small>` : ""}</button>`; };
           const extra = ["해외", "미지정"].filter((k) => RS[k]).map((k) => `<button type="button" class="chip" data-reg="${k}">${k} ${RS[k].courses.length}곳</button>`).join(" ");
           const regs = Object.keys(RS).filter((k) => k !== "미지정");
-          return `<div class="kmap-wrap"><div class="kmap">${Regions.TILES.map(tile).join("")}</div>
+          return `<div class="kmap-wrap"><div class="kmap-map">${Regions.svg(RS)}</div>
             <div class="kmap-side"><div class="kmap-total"><b>${regs.length}</b>개 지역 · <b>${S.sum(Object.values(RS).map((x) => x.courses.length))}</b>곳 골프장</div>${extra ? `<div class="row" style="margin-top:8px">${extra}</div>` : ""}
             ${RS["미지정"] ? `<p class="legend-note">지역을 모르는 골프장은 「미지정」입니다. <a href="#/settings">설정 → 골프장 지역</a>에서 정해 주세요.</p>` : ""}</div></div>
             <div id="regionPanel"></div>`;

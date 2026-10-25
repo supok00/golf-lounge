@@ -55,5 +55,33 @@ const Regions = (() => {
     return out;
   }
 
-  return { TILES, NAMES, DEFAULTS, of, summarize };
+  /* 실제 지도(SVG): 지역을 방문 골프장 수만큼 진하게 칠하고, 숫자 말풍선을 올린다.
+   * 서울·인천처럼 작은 지역은 이름이 겹치지 않게 말풍선을 옆으로 빼고 가는 선으로 잇는다. */
+  const LABEL = {   // [x, y] — 기본 위치(지역 중심)에서 옮긴 말풍선 자리
+    경기: [292, 108], 서울: [236, 92], 인천: [172, 150], 세종: [222, 226], 대전: [300, 302],
+    광주: [196, 432], 대구: [430, 318], 울산: [492, 360], 부산: [470, 448], 충남: [196, 285],
+  };
+  function svg(RS) {
+    if (typeof KoreaMap === "undefined") return "";
+    const lv = (n) => (!n ? "l0" : n <= 2 ? "l1" : n <= 5 ? "l2" : "l3");
+    // 제주는 실제 위치가 멀어 지도가 길어지므로 위로 올려 붙인다(지도 관례상 인셋 배치)
+    const JEJU_UP = 75;
+    const vb = [KoreaMap.viewBox[0], KoreaMap.viewBox[1], KoreaMap.viewBox[2], KoreaMap.viewBox[3] - JEJU_UP];
+    const tf = (n) => (n === "제주" ? ` transform="translate(0,-${JEJU_UP})"` : "");
+    const shapes = KoreaMap.regions.map((r) => {
+      const n = RS[r.n] ? RS[r.n].courses.length : 0;
+      return `<path class="kr ${lv(n)}" data-reg="${r.n}" d="${r.d}"${tf(r.n)}><title>${r.n} ${n}곳</title></path>`;
+    }).join("");
+    const labels = KoreaMap.regions.map((r) => {
+      const x = RS[r.n], n = x ? x.courses.length : 0;
+      const [cx, cy] = r.c, [lx, ly] = LABEL[r.n] || r.c;
+      const moved = LABEL[r.n] && (Math.abs(lx - cx) > 4 || Math.abs(ly - cy) > 4);
+      const line = moved ? `<line class="kl" x1="${cx}" y1="${cy}" x2="${lx}" y2="${ly}"/><circle class="kd" cx="${cx}" cy="${cy}" r="2.5"/>` : "";
+      if (!n) return `<text class="kn0" x="${lx}" y="${ly + 4}"${tf(r.n)}>${r.n}</text>`;
+      return `<g class="kb" data-reg="${r.n}"${tf(r.n)}>${line}<circle cx="${lx}" cy="${ly}" r="19"/><text class="kc" x="${lx}" y="${ly + 2}">${n}곳</text><text class="kn" x="${lx}" y="${ly + 14}">${r.n}</text></g>`;
+    }).join("");
+    return `<svg class="kmap-svg" viewBox="${vb.join(" ")}" role="img" aria-label="대한민국 지역별 방문 골프장 수">${shapes}${labels}</svg>`;
+  }
+
+  return { TILES, NAMES, DEFAULTS, of, summarize, svg };
 })();

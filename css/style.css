@@ -258,3 +258,20 @@ td.na { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0
 .region-panel { margin-top: 14px; }
 .region-head { font-weight: 800; margin-bottom: 8px; color: #3654b8; }
 @media (max-width: 600px) { .kmap { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 58px; width: 100%; } }
+
+/* 다녀온 지역 — 실제 지도 (파스텔) */
+.kmap-map { width: min(100%, 460px); padding: 8px; border-radius: 18px; background: linear-gradient(165deg, #f0f7ff 0%, #effaf4 50%, #f8fafc 100%); }
+.kmap-svg { width: 100%; height: auto; display: block; }
+.kmap-svg .kr { fill: #e8edf5; stroke: #fff; stroke-width: 1.5; stroke-linejoin: round; transition: fill .15s; }
+.kmap-svg .kr.l1 { fill: #cdeedd; cursor: pointer; }
+.kmap-svg .kr.l2 { fill: #8fdab8; cursor: pointer; }
+.kmap-svg .kr.l3 { fill: #3fae86; cursor: pointer; }
+.kmap-svg .kr:not(.l0):hover, .kmap-svg .kr.sel { fill: #ffc59a; }
+.kmap-svg .kb { cursor: pointer; }
+.kmap-svg .kb circle:not(.kd) { fill: #fff; stroke: #6c8cff; stroke-width: 2; filter: drop-shadow(0 3px 4px rgba(80,100,150,.25)); transition: transform .15s; }
+.kmap-svg .kb.sel circle:not(.kd) { stroke: #ff8f8f; stroke-width: 3; }
+.kmap-svg .kc { font: 800 12px Pretendard, sans-serif; fill: #3654b8; text-anchor: middle; }
+.kmap-svg .kn { font: 700 9px Pretendard, sans-serif; fill: #4a5263; text-anchor: middle; }
+.kmap-svg .kn0 { font: 600 10px Pretendard, sans-serif; fill: #a7b0c2; text-anchor: middle; pointer-events: none; }
+.kmap-svg .kl { stroke: #6c8cff; stroke-width: 1; stroke-dasharray: 2 2; }
+.kmap-svg .kd { fill: #6c8cff; }
