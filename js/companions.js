@@ -256,10 +256,16 @@ const Companions = (() => {
    * 이름 없는 「Score」 줄(스마트스코어 화면)은 「나」로 둔다. */
   function scanCard(text, known = []) {
     const lines = String(text || "").split("\n");
-    let date = "";
+    let date = "", time = "";
     for (const l of lines) {
       const m = l.match(/(20\d{2}|\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/);
-      if (m) { const y = m[1].length === 2 ? "20" + m[1] : m[1]; date = `${y}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`; break; }
+      if (m) {
+        const y = m[1].length === 2 ? "20" + m[1] : m[1];
+        date = `${y}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+        const t = l.slice(m.index + m[0].length).match(/(\d{1,2}):(\d{2})/);
+        if (t) time = `${t[1].padStart(2, "0")}:${t[2]}`;
+        break;
+      }
     }
     // 골프장: 아는 골프장 이름이 들어 있는 줄 → 없으면 CC·GC·컨트리·골프가 들어간 줄
     const norm = (x) => String(x).toLowerCase().replace(/\s+/g, "");
@@ -278,7 +284,7 @@ const Companions = (() => {
     }
     const pars = Object.fromEntries(parVals.map((v, i) => [i + 1, v]));
     const players = parse(text, pars, { scoreName: "나" });
-    return { date, course, pars, players };
+    return { date, time, course, pars, players };
   }
 
   return { parse, summary, shrink, ocr, cleanOcr, scanCard };

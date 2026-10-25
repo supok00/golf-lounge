@@ -1150,6 +1150,7 @@
         <li>네이버 스마트스코어의 라운드 화면(골프장 · 코스 · 날짜 시간 · 총타수 · 홀별 Par/Score)을 복사해 아래에 붙여 넣으세요. 여러 라운드를 한꺼번에 붙여도 됩니다.</li>
         <li>읽은 결과를 확인하고 고칠 수 있습니다. 같은 날짜·골프장이 이미 있으면 기본으로 빼 둡니다.</li>
         <li><b>홀 길이도 넣을 수 있습니다.</b> 스마트스코어 텍스트에는 거리가 없으니, 각 반쪽의 Par/Score 줄 아래에 <code>거리 343 318 314 ...</code>처럼 한 줄을 더 적으세요. 앞에 티 이름을 쓰면(<code>White 343 318 ...</code>) 그 티로 기록되고, <code>Yard 375 ...</code>로 쓰면 m로 바꿔 저장합니다. 18홀을 한 줄에 적어도 됩니다. 거리는 <b>실제로 친 티</b> 기준으로 넣으세요.</li>
+        <li><b>스코어카드 표 형식도 됩니다</b>: 날짜 줄, 「홀 1 2 3 …」·「PAR …」 줄, 그리고 선수마다 「이름 +/- … SUB TOT」 줄로 된 결과를 붙여 넣고 「읽기」를 누르면 확인 카드가 나옵니다. 내 줄을 「나」로 고르고 골프장을 적으면 나머지 선수는 동반자로 들어갑니다.</li>
         <li><b>동반자</b>: 붙여 넣은 글에 「이름 숫자…」 줄(예: <code>홍*동 1 0 2 …</code>, <code>철수 85</code>)이 있으면 동반자로 읽습니다. 「추가·편집」에서 스코어만 넣거나, 따로 붙여 넣거나, 스코어카드 사진에서 읽을 수 있고 사진을 라운드에 붙일 수도 있습니다. 이름 가운데 *가 있으면 고쳐 주세요.</li>
         <li>홀별 Par·Score·거리와 티오프 시간이 들어옵니다. 퍼트 등 상세 항목은 등록 뒤 「수정」에서 채우면 됩니다.</li>
       </ul>
@@ -1189,6 +1190,18 @@
         return { ...r, course, origCourse: r.course, dup, pick: !dup && r.holes.length > 0, st };
       });
       compIdx = -1;
+      // 스마트스코어 「Score」 줄이 없으면 스코어카드 표(홀·PAR 줄 + 선수 이름 줄)로 다시 읽어 확인 카드를 띄운다
+      if (!parsed.some((r) => r.holes.length)) {
+        const sc = Companions.scanCard($("ssText").value, known);
+        if (sc.players.length && Object.keys(sc.pars).length >= 9) {
+          parsed = [];
+          $("ssOut").innerHTML = "";
+          card = { text: $("ssText").value, photos: [], date: "", course: "", tee: "", me: null };
+          drawCard();
+          $("photoCard").scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+      }
       drawParsed();
     };
     /* ── 사진만으로 라운드 읽기 ──
@@ -1219,7 +1232,7 @@
       drawCard();
     }
     function cardPars(sc) {
-      if (Object.keys(sc.pars).length >= 9) return { pars: sc.pars, src: "사진에서 읽음" };
+      if (Object.keys(sc.pars).length >= 9) return { pars: sc.pars, src: "스코어카드에서 읽음" };
       const prev = S.byRecent(rounds.filter((r) => r.course === card.course && (r.holes || []).some((h) => isNum(h.par))))[0];
       if (prev) return { pars: parsOf(prev), src: `${dot(prev.date)} 라운드의 Par` };
       return { pars: sc.pars, src: "" };
@@ -1240,7 +1253,9 @@
       }
       card.players = players; card.pars = pars;
       const parTxt = Array.from({ length: 18 }, (_, i) => pars[i + 1] ?? "·").join(" ");
-      box.innerHTML = `<div class="card" style="margin-top:12px"><h3 class="mt0">📷 사진에서 읽은 스코어</h3>
+      if (card.time === undefined) card.time = sc.time || "";
+      box.innerHTML = `<div class="card" style="margin-top:12px"><h3 class="mt0">${card.photos.length ? "📷 사진에서 읽은 스코어" : "📋 붙여 넣은 스코어카드"}</h3>
+        ${card.photos.length ? "" : `<p class="legend-note">「Score」 줄 대신 선수 이름 줄로 된 스코어카드로 읽었습니다. 내 줄을 「나」로 고르고 <b>골프장</b>을 적어 주세요.</p>`}
         <div class="photos">${card.photos.map((p) => `<div class="ph"><img src="${p.dataUrl}" alt="첨부 사진"></div>`).join("")}</div>
         <div class="form" style="margin-top:10px">
           <label class="f">날짜<input id="pcDate" type="date" value="${esc(card.date)}"></label>
@@ -1273,7 +1288,7 @@
         const holes = me.holes.map(({ h, st }) => ({ h, par: card.pars[h], score: st - card.pars[h] }));
         const comps = card.players.filter((_, i) => i !== card.me);
         const dup = rounds.some((x) => x.date === card.date && x.course === card.course);
-        parsed.push({ date: card.date, time: "", course: card.course, origCourse: card.course, front: "", back: "", tee: card.tee, distCount: 0, statedTotal: null,
+        parsed.push({ date: card.date, time: card.time || "", course: card.course, origCourse: card.course, front: "", back: "", tee: card.tee, distCount: 0, statedTotal: null,
           total: S.sum(holes.map((h) => h.par + h.score)), holes, warnings: holes.length === 18 ? [] : [`${holes.length}홀만 읽었습니다`], block: "", dup, pick: !dup,
           st: { comps, photos: card.photos, removed: [], text: "" } });
         compIdx = parsed.length - 1;
