@@ -735,7 +735,7 @@
         <div class="row"><label class="btn ghost filebtn">📷 사진 선택<input type="file" accept="image/*" multiple data-act="file" hidden></label>
           <label class="chk"><input type="checkbox" data-act="ocr" ${st.ocr === false ? "" : "checked"}> 사진에서 점수 읽기</label>
           <label class="chk"><input type="checkbox" data-act="keep" ${st.keep === false ? "" : "checked"}> 라운드에 사진 저장</label></div>
-        <p class="legend-note">점수 읽기는 사진 속 글자를 <b>이 기기에서</b> 읽어 위 붙여넣기 칸에 넣습니다(처음 한 번 인식 데이터를 받느라 시간이 걸림). 손글씨·흐린 사진은 틀리기 쉬우니 확인·수정한 뒤 「읽어서 추가」를 누르세요. 저장한 사진은 공개 저장소에 올라가며, 촬영 위치 등 사진 속 정보는 지우고 올립니다.</p>
+        <p class="legend-note">점수 읽기는 사진 속 글자를 <b>이 기기에서</b> 읽어 동반자 「이름·점수」를 바로 넣습니다(처음 한 번 인식 데이터를 받느라 시간이 걸림). 손글씨·흐린 사진은 틀리기 쉬우니 숫자를 확인하고, 이상하면 읽은 글이 들어간 붙여넣기 칸을 고쳐 「읽어서 추가」를 누르세요. 저장한 사진은 공개 저장소에 올라가며, 촬영 위치 등 사진 속 정보는 지우고 올립니다.</p>
         <div class="ocr-msg" data-act="msg"></div>
         ${st.photos.length ? `<div class="photos">${st.photos.map((p, i) => `<div class="ph"><img src="${p.dataUrl || G.rawUrl(p.path)}" alt="사진 ${i + 1}">${p.dataUrl ? `<span class="ph-new">저장 전</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}`;
       const q = (s) => box.querySelector(s);
@@ -1129,15 +1129,17 @@
       <textarea id="ssText" class="pastebox" placeholder="예)&#10;기흥CC&#10;NORTH, WEST&#10;2026-08-29 07:10&#10;80&#10;홀별 스코어&#10;Par 4 4 3 ...&#10;Score 0 1 0 ...&#10;White 320 300 140 ...   ← 홀 길이(선택)&#10;Par ...&#10;Score ...&#10;White ..."></textarea>
       <div class="row" style="margin-top:8px"><button class="btn" id="bParse" type="button">읽기</button><button class="btn ghost" id="bClear" type="button">지우기</button>
         <label class="btn ghost filebtn">📷 사진 첨부 (동반자 점수)<input type="file" accept="image/*" multiple id="ssPhoto" hidden></label></div>
-      <p class="legend-note">스코어카드·스마트스코어 화면 사진을 첨부하면 사진 속 동반자 「이름·점수」를 읽어 동반자로 넣고, 사진은 라운드에 함께 저장합니다. 글을 먼저 붙여 넣으면 그 라운드에 붙습니다(여러 라운드면 「추가·편집」을 연 라운드, 아니면 첫 번째 등록 대상).</p>
+      <p class="legend-note"><b>사진만 첨부해도 됩니다.</b> 스코어카드나 스마트스코어 화면 사진을 고르면 날짜·골프장·Par·선수별 점수를 읽어 「사진에서 읽은 스코어」로 보여 주고, 내 줄을 고르면 나머지는 동반자로 등록됩니다. 글을 먼저 붙여 넣었다면 사진은 그 라운드에 붙고 사진 속 동반자 점수만 더합니다.</p>
       <div id="ssPhotoMsg" class="ocr-msg"></div>
+      <div id="photoCard"></div>
       <div id="ssOut"></div>`;
     const $ = (x) => document.getElementById(x);
-    $("bClear").onclick = () => { $("ssText").value = ""; $("ssOut").innerHTML = ""; $("ssPhotoMsg").innerHTML = ""; parsed = []; };
+    $("bClear").onclick = () => { $("ssText").value = ""; $("ssOut").innerHTML = ""; $("ssPhotoMsg").innerHTML = ""; parsed = []; card = null; drawCard(); };
     $("ssPhoto").onchange = async (e) => {
       const files = [...e.target.files];
       e.target.value = "";
       if (!files.length) return;
+      if (!$("ssText").value.trim() && !parsed.length) { await photoOnly(files); return; }
       if (!parsed.length && $("ssText").value.trim()) $("bParse").click();
       const idx = compIdx >= 0 && parsed[compIdx] ? compIdx : parsed.findIndex((r) => r.pick) >= 0 ? parsed.findIndex((r) => r.pick) : parsed.findIndex((r) => r.holes.length);
       if (idx < 0) { $("ssPhotoMsg").innerHTML = `<div class="notice">먼저 위 칸에 스마트스코어 글을 붙여 넣어 주세요. 사진과 동반자는 그 라운드에 붙습니다.</div>`; return; }
@@ -1161,6 +1163,98 @@
       compIdx = -1;
       drawParsed();
     };
+    /* ── 사진만으로 라운드 읽기 ──
+     * 사진 글자를 읽어 스마트스코어 화면이면 기존 읽기로, 아니면 스코어카드로 보고 확인 카드를 띄운다. */
+    const KEY_ME = KEY_DRAFT.split(".")[0] + ".meName.v1";   // 지난번 「나」로 고른 줄 이름(이 기기에만)
+    let card = null;
+    async function photoOnly(files) {
+      const msg = $("ssPhotoMsg"), photos = [], texts = [];
+      try {
+        for (const [n, f] of files.entries()) {
+          photos.push(await Companions.shrink(f));
+          msg.innerHTML = `<div class="notice">사진 ${n + 1}/${files.length} 글자 읽는 중… <span data-p>0%</span> (처음에는 인식 데이터를 받느라 1분 가까이 걸릴 수 있음)</div>`;
+          texts.push(await Companions.ocr(f, (st, pr) => { const el = msg.querySelector("[data-p]"); if (el) el.textContent = Math.round(pr * 100) + "%"; }));
+        }
+      } catch (err) { msg.innerHTML = ""; toast(err.message || String(err), 6000); return; }
+      const text = texts.join("\n");
+      const ss = SmartScore.parse(text).filter((r) => r.holes.length >= 9);
+      if (ss.length) {
+        $("ssText").value = text;
+        $("bParse").click();
+        const pr = parsed.find((r) => r.holes.length);
+        if (pr) { pr.st.photos.push(...photos); compIdx = parsed.indexOf(pr); drawParsed(); }
+        msg.innerHTML = `<div class="notice">스마트스코어 화면으로 읽었습니다. 아래 표에서 확인하세요(읽은 글은 위 칸에 있어 고친 뒤 「읽기」를 다시 눌러도 됩니다).</div>`;
+        return;
+      }
+      msg.innerHTML = "";
+      card = { text, photos, date: "", course: "", tee: "", me: null };
+      drawCard();
+    }
+    function cardPars(sc) {
+      if (Object.keys(sc.pars).length >= 9) return { pars: sc.pars, src: "사진에서 읽음" };
+      const prev = S.byRecent(rounds.filter((r) => r.course === card.course && (r.holes || []).some((h) => isNum(h.par))))[0];
+      if (prev) return { pars: parsOf(prev), src: `${dot(prev.date)} 라운드의 Par` };
+      return { pars: sc.pars, src: "" };
+    }
+    function drawCard() {
+      const box = $("photoCard");
+      if (!card) { box.innerHTML = ""; return; }
+      const sc = Companions.scanCard(card.text, known);
+      if (!card.date) card.date = sc.date || new Date().toISOString().slice(0, 10);
+      if (!card.course && sc.course) card.course = SmartScore.matchCourse(sc.course, known);
+      const { pars, src } = cardPars(sc);
+      // 선수 줄은 Par를 안 뒤에 다시 읽는다(+/-로 적힌 줄을 타수로 바꾸려면 Par가 필요)
+      const players = applyAlias(Companions.parse(card.text, pars, { scoreName: "나" }));
+      const myName = ls.get(KEY_ME);
+      if (card.me === null || card.me >= players.length) {
+        const i = players.findIndex((p) => p.name === "나" || p.orig === myName || p.name === myName);
+        card.me = i >= 0 ? i : 0;
+      }
+      card.players = players; card.pars = pars;
+      const parTxt = Array.from({ length: 18 }, (_, i) => pars[i + 1] ?? "·").join(" ");
+      box.innerHTML = `<div class="card" style="margin-top:12px"><h3 class="mt0">📷 사진에서 읽은 스코어</h3>
+        <div class="photos">${card.photos.map((p) => `<div class="ph"><img src="${p.dataUrl}" alt="첨부 사진"></div>`).join("")}</div>
+        <div class="form" style="margin-top:10px">
+          <label class="f">날짜<input id="pcDate" type="date" value="${esc(card.date)}"></label>
+          <label class="f">골프장<input id="pcCourse" list="pcCourses" value="${esc(card.course)}" placeholder="골프장 이름"></label>
+          <label class="f">티<input id="pcTee" value="${esc(card.tee)}" placeholder="예: White"></label>
+        </div>
+        <datalist id="pcCourses">${[...known].sort().map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
+        <p class="legend-note">Par: <b>${parTxt}</b> ${src ? `<span class="muted">(${src})</span>` : `<span class="ng">— Par를 읽지 못했습니다. 골프장을 고르면 이전 라운드의 Par를 쓰고, 처음 가는 곳이면 아래 글에 <code>Par 4 4 3 …</code> 줄을 적어 주세요.</span>`}</p>
+        ${players.length ? `<div class="tbl-wrap"><table><thead><tr><th>나</th><th class="l">읽은 이름</th><th>전반</th><th>후반</th><th>총타수</th><th>홀</th><th class="l">확인</th></tr></thead>
+          <tbody>${players.map((p, i) => { const sm = Companions.summary(p, pars); return `<tr${i === card.me ? ` class="me-row"` : ""}><td><input type="radio" name="pcMe" value="${i}" ${i === card.me ? "checked" : ""}></td><td class="l"><b>${esc(p.name)}</b></td><td>${sm.front ?? "-"}</td><td>${sm.back ?? "-"}</td><td><b>${sm.total ?? "-"}</b></td><td>${sm.holeCount || "-"}</td><td class="l">${p.warnings.length ? `<span class="ng">${esc(p.warnings.filter((w) => !(i === card.me && w.startsWith("이름"))).join(" / "))}</span>` : `<span class="ok">정상</span>`}</td></tr>`; }).join("")}</tbody></table></div>
+          <p class="legend-note">「나」로 고른 줄이 내 라운드가 되고, 나머지 줄은 동반자로 들어갑니다(이름은 다음 단계에서 고칠 수 있음).</p>`
+          : `<div class="notice">선수별 점수 줄을 찾지 못했습니다. 아래 읽은 글을 「이름 숫자…」 모양으로 고친 뒤 「다시 읽기」를 누르세요.</div>`}
+        <h4>읽은 글 <span class="muted">틀린 글자를 고치고 「다시 읽기」</span></h4>
+        <textarea id="pcText" class="pastebox small">${esc(card.text)}</textarea>
+        <div class="row" style="margin-top:8px"><button class="btn ghost" id="pcRe" type="button">다시 읽기</button><button class="btn" id="pcAdd" type="button" ${players.length ? "" : "disabled"}>읽기 결과에 추가</button><button class="btn ghost" id="pcDrop" type="button">취소</button></div></div>`;
+      $("pcDate").onchange = (e) => (card.date = e.target.value);
+      $("pcCourse").onchange = (e) => { card.course = e.target.value.trim(); drawCard(); };
+      $("pcTee").onchange = (e) => (card.tee = e.target.value.trim());
+      box.querySelectorAll('[name="pcMe"]').forEach((r) => (r.onchange = () => { card.me = Number(r.value); drawCard(); }));
+      $("pcRe").onclick = () => { card.text = $("pcText").value; drawCard(); };
+      $("pcDrop").onclick = () => { card = null; drawCard(); };
+      $("pcAdd").onclick = () => {
+        card.text = $("pcText").value;
+        const me = card.players[card.me];
+        if (!card.date || !card.course) { toast("날짜와 골프장을 적어 주세요."); return; }
+        if (!me || !me.holes.length) { toast("내 줄에 홀별 점수가 없습니다. 홀별 점수가 있는 줄을 「나」로 골라 주세요.", 5000); return; }
+        const noPar = me.holes.filter((h) => !isNum(card.pars[h.h])).map((h) => h.h);
+        if (noPar.length) { toast(`${noPar.join("·")}번 홀 Par를 모릅니다. 읽은 글에 Par 줄을 적거나 골프장을 골라 주세요.`, 6000); return; }
+        if (me.orig && me.orig !== "나") ls.set(KEY_ME, me.orig);
+        const holes = me.holes.map(({ h, st }) => ({ h, par: card.pars[h], score: st - card.pars[h] }));
+        const comps = card.players.filter((_, i) => i !== card.me);
+        const dup = rounds.some((x) => x.date === card.date && x.course === card.course);
+        parsed.push({ date: card.date, time: "", course: card.course, origCourse: card.course, front: "", back: "", tee: card.tee, distCount: 0, statedTotal: null,
+          total: S.sum(holes.map((h) => h.par + h.score)), holes, warnings: holes.length === 18 ? [] : [`${holes.length}홀만 읽었습니다`], block: "", dup, pick: !dup,
+          st: { comps, photos: card.photos, removed: [], text: "" } });
+        compIdx = parsed.length - 1;
+        card = null;
+        drawCard();
+        drawParsed();
+        toast("읽기 결과에 추가했습니다. 동반자 이름을 확인하고 등록하세요.");
+      };
+    }
     function drawParsed() {
       if (!parsed.length) { $("ssOut").innerHTML = `<div class="notice" style="margin-top:10px">라운드를 찾지 못했습니다. 날짜 줄(예: 2025-01-19 11:15)과 Par/Score 줄이 들어 있는지 확인하세요.</div>`; return; }
       const n = parsed.filter((r) => r.pick).length;

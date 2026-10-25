@@ -16,6 +16,7 @@ const Companions = (() => {
   const NUM_TAIL = /^(.*?)\s*[:：]?\s*([+-]?\d+(?:(?:\s*[,/]\s*|\s+)[+-]?\d+)*)\s*(?:타)?$/;
   const SKIP = /^(par|파|hole|홀|홀별|합계|total|거리|dist|yard|yds?|white|blue|red|black|gold|화이트|블루|레드|블랙|골드|핸디|hdcp|handicap|out|in)\b/i;
   const DATE = /^\d{4}[-.]\d{1,2}[-.]\d{1,2}/;
+  const DATE_ANY = /(20\d{2}|\b\d{2})\s*[.\-/년]\s*\d{1,2}\s*[.\-/월]\s*\d{1,2}/;
 
   // OCR 결과에서 자주 틀리는 글자를 숫자로 고친다(숫자 사이에 있을 때만)
   function cleanOcr(text) {
@@ -52,6 +53,36 @@ const Companions = (() => {
     return a;
   }
 
+  /* OCR이 옆 칸 숫자를 붙여 읽은 것(453, 45455, 55)을 홀 칸으로 나눈다.
+   * 3자리 이상은 끝의 18홀 합계(60~150)가 아니면 한 자리씩 나눈다. 2자리 중 16 이상은 합계일 수도 붙은 숫자일 수도 있어,
+   * 나누는 조합을 모두 해 보고 「홀 수 9·18 + 합계 칸이 홀 합과 맞음」인 것을 고른다(맞는 게 없으면 홀 수만 맞는 것). */
+  function splitMerged(tokens) {
+    const neg = (t) => t.startsWith("-") || t.startsWith("+");
+    const base = [];
+    tokens.forEach((t, i) => {
+      const v = Number(t);
+      if (!neg(t) && t.length >= 3 && !(i === tokens.length - 1 && v >= 60 && v <= 150)) base.push(...t.split("").map((c) => ({ t: c })));
+      else base.push({ t, amb: !neg(t) && t.length === 2 && v > 15 });
+    });
+    const amb = base.map((x, i) => (x.amb ? i : -1)).filter((i) => i >= 0).slice(0, 8);
+    let best = null;
+    for (let mask = 0; mask < 1 << amb.length; mask++) {
+      const seq = [];
+      base.forEach((x, i) => { const k = amb.indexOf(i); if (k >= 0 && mask & (1 << k)) seq.push(...x.t.split("").map(Number)); else seq.push(Number(x.t)); });
+      const holes = stripTotals(seq);
+      if (holes.length !== 9 && holes.length !== 18) continue;
+      if (holes.some((v) => v > 15)) continue;
+      const tots = seq.length - holes.length;
+      const last = seq.at(-1), hs = sum(holes);
+      // 합계 칸 맞음: 타수 합 그대로이거나(+/- 줄이면 합계가 타수라 홀 합보다 큼 — 그때는 크기만 본다)
+      const fits = tots === 0 ? 1 : last === hs || last === sum(holes.slice(-9)) ? 3 : last > hs ? 2 : 0;
+      const score = fits * 100 - popcount(mask);
+      if (!best || score > best.score) best = { score, seq };
+    }
+    return best ? best.seq : base.map((x) => Number(x.t));
+  }
+  const popcount = (m) => { let c = 0; while (m) { c += m & 1; m >>= 1; } return c; };
+
   /* text → [{ name, front, back, total, holes, warnings }]
    * pars: { 홀번호: par } — 내 라운드의 Par. +/-로 적은 줄을 타수로 바꿀 때 쓴다.
    * opts.skipScore: 「Score」 줄은 내 것으로 보고 건너뛴다(스마트스코어 붙여넣기 등록 화면). */
@@ -63,7 +94,7 @@ const Companions = (() => {
       // 숫자 사이에 낀 OUT·IN·합계 같은 칸 이름은 지운다(숫자는 남기고 stripTotals가 합계 칸을 뺀다)
       const d0 = line.search(/[+-]?\d/);
       if (d0 > 0) line = line.slice(0, d0) + line.slice(d0).replace(/(?:OUT|IN|TOTAL|TOT|합계|전반|후반)/gi, " ").replace(/\s{2,}/g, " ");
-      if (!line || DATE.test(line)) { if (DATE.test(line)) pending = ""; continue; }
+      if (!line || DATE.test(line) || DATE_ANY.test(line)) { if (line) pending = ""; continue; }
       const m = line.match(NUM_TAIL);
       if (!m) {
         // 숫자가 없는 짧은 줄은 다음 숫자 줄의 이름
@@ -71,11 +102,13 @@ const Companions = (() => {
         continue;
       }
       let label = m[1].trim();
-      const nums = (m[2].match(/[+-]?\d+/g) || []).map(Number);
+      const toks = m[2].match(/[+-]?\d+/g) || [];
+      const nums = toks.length >= 5 ? splitMerged(toks) : toks.map(Number);
       if (SKIP.test(label)) continue;
       if (/^(score|스코어)$/i.test(label)) {
-        if (opts.skipScore || !pending) continue;
-        label = pending;
+        if (opts.skipScore) continue;
+        if (!pending && !opts.scoreName) continue;
+        label = pending || opts.scoreName;
       } else if (!label) {
         if (pending) label = pending;
         else if (nums.length >= 9) {
@@ -218,6 +251,36 @@ const Companions = (() => {
     return cv;
   }
 
-  return { parse, summary, shrink, ocr, cleanOcr };
+  /* 사진 한 장(스코어카드)에서 라운드 재료를 찾는다: 날짜·골프장·Par 줄·선수별 줄.
+   * 반환 { date, course, pars: {홀: par}, players: [parse 결과] } — 누가 「나」인지는 화면에서 고른다.
+   * 이름 없는 「Score」 줄(스마트스코어 화면)은 「나」로 둔다. */
+  function scanCard(text, known = []) {
+    const lines = String(text || "").split("\n");
+    let date = "";
+    for (const l of lines) {
+      const m = l.match(/(20\d{2}|\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/);
+      if (m) { const y = m[1].length === 2 ? "20" + m[1] : m[1]; date = `${y}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`; break; }
+    }
+    // 골프장: 아는 골프장 이름이 들어 있는 줄 → 없으면 CC·GC·컨트리·골프가 들어간 줄
+    const norm = (x) => String(x).toLowerCase().replace(/\s+/g, "");
+    // 「드림파크<&@」처럼 CC 부분이 깨져도 맞도록, 아는 골프장 이름에서 CC·GC 등을 뺀 앞부분으로도 찾는다
+    const stem = (k) => norm(k).replace(/(cc|gc|c\.c|컨트리클럽|골프클럽|골프장|리조트)$/, "");
+    let course = known.find((k) => norm(k).length >= 2 && lines.some((l) => norm(l).includes(norm(k))))
+      || known.find((k) => stem(k).length >= 2 && lines.some((l) => norm(l).includes(stem(k)))) || "";
+    if (!course) { const l = lines.find((x) => /(cc|gc|c\.c|컨트리|골프|클럽|리조트)/i.test(x) && !/\d{3,}/.test(x)); if (l) course = l.trim(); }
+    // Par 줄(전반·후반 따로 또는 18홀 한 줄)
+    const parVals = [];
+    for (const l of lines) {
+      const m = l.match(/^\s*(par|파|p)\s*[:：]?\s+([\d\s]+)$/i);
+      if (!m) continue;
+      const nums = stripTotals(splitMerged(m[2].match(/\d+/g) || [])).filter((v) => v >= 3 && v <= 6);
+      parVals.push(...nums.slice(0, 18 - parVals.length));
+    }
+    const pars = Object.fromEntries(parVals.map((v, i) => [i + 1, v]));
+    const players = parse(text, pars, { scoreName: "나" });
+    return { date, course, pars, players };
+  }
+
+  return { parse, summary, shrink, ocr, cleanOcr, scanCard };
 })();
 if (typeof module !== "undefined") module.exports = Companions;
