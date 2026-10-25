@@ -222,3 +222,19 @@ code { background: #f1f4fa; padding: 1px 6px; border-radius: 6px; font-size: 13p
 
 /* 버전 */
 .status .ver { color: var(--lav-d); background: var(--lav); padding: 1px 8px; border-radius: 999px; text-decoration: none; font-weight: 800; }
+
+/* 자동 입력 칸 */
+label.f.auto select, label.f.auto input { background: #f1f6ff; color: #3b5fae; border-color: #cfe1fb; }
+.autotag { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; background: var(--lav); color: var(--lav-d); font-size: 11px; font-weight: 800; }
+
+/* 파3·파5 표시, 해당 없음 칸, 로고 링크 */
+.pb { display: block; font-style: normal; font-size: 16px; font-weight: 900; line-height: .6; height: 8px; }
+.pb.p3 { color: var(--sky-d); }
+.pb.p5 { color: var(--peach-d); }
+th .pb { display: inline-block; margin-left: 2px; font-size: 15px; height: auto; line-height: 1; }
+td.pc.p3 { background: var(--sky); font-weight: 800; color: var(--sky-d); }
+td.pc.p5 { background: var(--peach); font-weight: 800; color: var(--peach-d); }
+td.na, label.f.na select { color: #b0b7c6; text-align: center; }
+a.brand { text-decoration: none; cursor: pointer; }
+
+td.na { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.035) 4px 8px); }

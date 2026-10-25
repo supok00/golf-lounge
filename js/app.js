@@ -310,11 +310,14 @@
     ["메모", [["memo", "메모", "text"]]],
   ];
   const FLAT = FIELDS.flatMap(([, fs]) => fs);
+  const TEE_ONLY = new Set(["fw", "miss", "drive"]);   // 파4·파5 티샷에만 해당하는 칸
+  // 홀 표시: 파3은 짧은 홀 '.', 파5는 긴 홀 '-' (파4는 표시 없음)
+  const parMark = (p) => (p === 3 ? `<em class="pb p3" title="파3(짧은 홀)">.</em>` : p === 5 ? `<em class="pb p5" title="파5(긴 홀)">-</em>` : "");
   const TEXT_KEYS = new Set(["miss", "gmiss", "memo"]);
   const HINT = {
     dist: "실제로 친 티 기준(m)",
     score: "파=0, 보기=1, 더블=2, 버디=-1", fw: "파4·파5만", miss: "L 왼쪽 / R 오른쪽 / H 훅 / S 슬라이스 / - 없음",
-    ong: "그린에 올라가기까지 친 타수(벌타 포함). 비우면 타수−퍼트로 계산", sg: "어프로치가 의도대로 됐으면 ○",
+    ong: "그린에 올라가기까지 친 타수(벌타 포함). 비우면 타수−퍼트로 계산", sg: "자동: 그린 놓친 홀에서 1퍼트로 막았거나 첫 퍼트 2m 이내면 ○",
     gmiss: "그린을 놓친 방향", appr: "그린을 놓쳤을 때 핀까지 남은 거리",
   };
 
@@ -328,6 +331,53 @@
     const H = Object.fromEntries(Array.from({ length: 18 }, (_, i) => [i + 1, { h: i + 1 }]));
     (r.holes || []).forEach((h) => (H[h.h] = { ...h }));
     let cur = 1;
+
+    /* ── 자동 입력: 위에서 적은 값으로 아래 칸을 채운다 ──
+     * AUTO[홀]은 자동으로 채운 칸 이름 모음. 사용자가 그 칸을 직접 바꾸면 빠지고(직접 입력이 우선),
+     * 남아 있는 자동 칸은 Score·Putts 등이 바뀔 때마다 다시 계산한다. 이 표시는 저장하지 않는다. */
+    const AUTO = Object.fromEntries(Object.keys(H).map((n) => [n, new Set()]));
+    function derive(h) {
+      const out = {};
+      const known = isNum(h.par) && isNum(h.score);
+      if (known && isNum(h.putts) && h.par + h.score - h.putts >= 1) out.ong = h.par + h.score - h.putts;
+      if (isNum(h.par) && h.par > 3) {
+        const m = String(h.miss || "").toUpperCase();
+        if (["L", "R", "H", "S"].includes(m)) out.fw = 0;
+        else if (m === "-") out.fw = 1;
+        if (h.fw === 1 && !AUTO[h.h]?.has("fw")) out.miss = "-";
+      }
+      const ongManual = isNum(h.ong) && !AUTO[h.h]?.has("ong");
+      const g = S.holeGir({ ...h, ong: ongManual ? h.ong : out.ong });
+      if (g === 1) { out.gmiss = "-"; out.sg = null; }
+      if (g === 0 && isNum(h.putts)) out.sg = h.putts <= 1 || (isNum(h.fp) && h.fp > 0 && h.fp <= 2) ? 1 : 0;
+      if (isNum(h.score)) out.pen = 0;
+      return out;   // null = 비워야 함(해당 없음)
+    }
+    function autoFill(n) {
+      let any = false;
+      for (let i = 0; i < 4 && autoFillOnce(n); i++) any = true;
+      return any;
+    }
+    function autoFillOnce(n) {
+      const h = H[n], set = AUTO[n];
+      let changed = false;
+      for (const [k, v] of Object.entries(derive(h))) {
+        const manual = h[k] !== undefined && !set.has(k);
+        if (manual) continue;
+        if (v === null) { if (set.has(k)) { delete h[k]; set.delete(k); changed = true; } continue; }
+        if (h[k] !== v) { h[k] = v; changed = true; }
+        set.add(k);
+      }
+      // 근거가 사라진 자동 칸은 지운다(예: Putts를 지우면 온그린 타수도 비움)
+      const d = derive(h);
+      for (const k of [...set]) if (!(k in d)) { delete h[k]; set.delete(k); changed = true; }
+      return changed;
+    }
+    // 불러온 기록: 저장된 값이 계산값과 같으면 자동 칸으로 본다(나중에 Score를 고치면 같이 바뀌도록)
+    for (const n of Object.keys(H)) {
+      const d = derive(H[n]);
+      for (const [k, v] of Object.entries(d)) if (v !== null && H[n][k] === v) AUTO[n].add(k);
+    }
     const courses = [...new Set(rounds.map((x) => x.course))].sort();
     const tees = [...new Set(["White", "Blue", "Black", "Red", "Gold", ...rounds.map((x) => x.tee).filter(Boolean)])];
 
@@ -372,13 +422,16 @@
 
     function field([k, lab, type, opts]) {
       const v = H[cur][k];
-      const dis = k === "fw" && H[cur].par === 3 ? "disabled" : "";
+      // 파3은 드라이버 티샷이 없어 FW 안착·티샷 미스·티샷 거리가 해당 없다 → '-'로 잠근다
+      if (TEE_ONLY.has(k) && H[cur].par === 3) return `<label class="f na">${lab}<select disabled><option>해당 없음</option></select><span class="hint">파3은 드라이버 티샷이 없음</span></label>`;
+      const dis = "";
       let ctl;
       if (type === "sel") ctl = `<select data-k="${k}" ${dis}><option value=""></option>${opts.map((o) => `<option value="${o}" ${String(v) === String(o) ? "selected" : ""}>${typeof o === "number" && o > 0 && k === "score" ? "+" + o : o}</option>`).join("")}</select>`;
       else if (type === "ox") ctl = `<select data-k="${k}" ${dis}><option value=""></option><option value="1" ${v === 1 ? "selected" : ""}>○</option><option value="0" ${v === 0 ? "selected" : ""}>×</option></select>`;
       else if (type === "num") ctl = `<input data-k="${k}" type="number" inputmode="decimal" step="0.5" min="0" value="${v ?? ""}">`;
       else ctl = `<input data-k="${k}" value="${esc(v ?? "")}">`;
-      return `<label class="f ${k === "score" ? "key" : ""} ${k === "memo" ? "wide" : ""}">${lab}${ctl}${HINT[k] ? `<span class="hint">${HINT[k]}</span>` : ""}</label>`;
+      const auto = AUTO[cur].has(k) && v !== undefined;
+      return `<label class="f ${k === "score" ? "key" : ""} ${k === "memo" ? "wide" : ""} ${auto ? "auto" : ""}">${lab}${auto ? ` <span class="autotag">자동</span>` : ""}${ctl}${HINT[k] ? `<span class="hint">${HINT[k]}</span>` : ""}</label>`;
     }
     function drawCard() {
       const h = H[cur];
@@ -399,9 +452,11 @@
           const k = el.dataset.k;
           const raw = el.value;
           H[cur][k] = raw === "" ? undefined : TEXT_KEYS.has(k) ? raw.trim() : k === "dist" || k === "drive" ? Math.round(Number(raw)) : Number(raw);
-          if (k === "par" && H[cur].par === 3) H[cur].fw = undefined;
+          AUTO[cur].delete(k);   // 직접 고친 칸은 자동 계산 대상에서 뺀다
+          if (k === "par" && H[cur].par === 3) for (const t of TEE_ONLY) { delete H[cur][t]; AUTO[cur].delete(t); }
+          const filled = autoFill(cur);
           saveDraft();
-          drawAll(k === "par");
+          drawAll(k === "par" || filled);
         });
       });
     }
@@ -410,7 +465,8 @@
         const h = H[i + 1];
         const s = h.score;
         const cls = isNum(s) ? (s <= -1 ? "sc-m2" : s === 0 ? "sc-0" : s === 1 ? "sc-1" : s === 2 ? "sc-2" : "sc-3") : "";
-        return `<button type="button" class="hn-btn ${cls} ${i + 1 === cur ? "cur" : ""}" data-h="${i + 1}"><span>${i + 1}</span><small>${isNum(s) ? (s > 0 ? "+" + s : s) : "·"}</small></button>`;
+        const pb = parMark(h.par);
+        return `<button type="button" class="hn-btn ${cls} ${i + 1 === cur ? "cur" : ""}" data-h="${i + 1}">${pb}<span>${i + 1}</span><small>${isNum(s) ? (s > 0 ? "+" + s : s) : "·"}</small></button>`;
       }).join("");
       $("holeNav").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { cur = Number(b.dataset.h); drawAll(true); }));
     }
@@ -500,6 +556,8 @@
     const cell = (h, k) => {
       const x = hm[h] || {};
       const v = x[k];
+      if (k === "par" && (v === 3 || v === 5)) return `<td class="pc p${v}">${v}</td>`;
+      if (TEE_ONLY.has(k) && x.par === 3) return `<td class="na" title="파3 해당 없음"></td>`;
       if (k === "score" && isNum(v)) return `<td class="sc-cell ${v <= -1 ? "sc-m2" : v === 0 ? "sc-0" : v === 1 ? "sc-1" : v === 2 ? "sc-2" : "sc-3"}">${v > 0 ? "+" + v : v}</td>`;
       if (k === "gir") { const g = hm[h] ? S.holeGir(x) : null; return `<td>${g === null ? "" : g ? "○" : "×"}</td>`; }
       if (k === "fw" || k === "sg") return `<td>${v === 1 ? "○" : v === 0 ? "×" : ""}</td>`;
@@ -516,7 +574,7 @@
       return "";
     };
     const half = (a, name) => `<div class="tbl-wrap card-tbl" style="margin-top:8px"><table>
-      <thead><tr><th class="l">${name}</th>${Array.from({ length: 9 }, (_, i) => `<th>${a + i}</th>`).join("")}<th>${a === 1 ? "OUT" : "IN"}</th></tr></thead>
+      <thead><tr><th class="l">${name}</th>${Array.from({ length: 9 }, (_, i) => { const p = hm[a + i]?.par; return `<th>${a + i}${parMark(p)}</th>`; }).join("")}<th>${a === 1 ? "OUT" : "IN"}</th></tr></thead>
       <tbody>${rowsUsed.map(([k, lab, how]) => `<tr><th class="l">${lab}</th>${Array.from({ length: 9 }, (_, i) => cell(a + i, k)).join("")}<td><b>${tot(a, k, how || (k === "gir" ? "gir" : ""))}</b></td></tr>`).join("")}</tbody></table></div>`;
     return half(1, "전반") + half(10, "후반");
   }
