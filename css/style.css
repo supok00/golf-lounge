@@ -231,7 +231,7 @@ label.f.auto select, label.f.auto input { background: #f1f6ff; color: #3b5fae; b
 .pb { display: block; font-style: normal; font-size: 16px; font-weight: 900; line-height: .6; height: 8px; }
 .pb.p3 { color: var(--sky-d); }
 .pb.p5 { color: var(--peach-d); }
-th .pb { display: inline-block; margin-left: 2px; font-size: 15px; height: auto; line-height: 1; }
+th .pb { display: block; text-align: center; font-size: 15px; height: 8px; line-height: .5; margin: 0 auto 2px; }
 td.pc.p3 { background: var(--sky); font-weight: 800; color: var(--sky-d); }
 td.pc.p5 { background: var(--peach); font-weight: 800; color: var(--peach-d); }
 td.na, label.f.na select { color: #b0b7c6; text-align: center; }

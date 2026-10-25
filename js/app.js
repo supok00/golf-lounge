@@ -41,7 +41,7 @@
     if (el && window.Chart) charts.push(new Chart(el, cfg));
   }
   // 차트 데이터 레이블: 값만 표시 (계열·항목 이름 없음)
-  const valueLabels = (fmt) => ({
+  const valueLabels = (fmt, color) => ({
     id: "valueLabels",
     afterDatasetsDraw(c) {
       const { ctx } = c;
@@ -57,12 +57,42 @@
           const v = ds.data[j];
           if (!isNum(v)) return;
           const hz = c.options.indexAxis === "y";
+          ctx.fillStyle = (color && color(v, j, ds)) || "#333";
           ctx.fillText(fmt(v), hz ? el.x + 18 : el.x, hz ? el.y + 4 : el.y - 6);
         });
       });
       ctx.restore();
     },
   });
+  const UP = "#d9475a", DOWN = "#2f6fd6";   // 평균보다 높음(나쁨) / 낮음(좋음) — 타수 기준
+  const popHover = {
+    id: "popHover",
+    afterDatasetsDraw(c) {
+      const act = c.getActiveElements ? c.getActiveElements() : [];
+      c.canvas.style.cursor = act.length ? "pointer" : "default";
+      for (const a of act) {
+        const meta = c.getDatasetMeta(a.datasetIndex);
+        if (meta.type !== "bar") continue;
+        const el = a.element, ds = c.data.datasets[a.datasetIndex];
+        const { x, y, base, width, height } = el.getProps(["x", "y", "base", "width", "height"], true);
+        const hz = c.options.indexAxis === "y", g = 3;
+        const left = hz ? Math.min(x, base) : x - width / 2, top = hz ? y - height / 2 : Math.min(y, base);
+        const w = hz ? Math.abs(x - base) : width, h = hz ? height : Math.abs(base - y);
+        const bg = Array.isArray(ds.backgroundColor) ? ds.backgroundColor[a.index] : ds.backgroundColor;
+        const ctx = c.ctx;
+        ctx.save();
+        ctx.shadowColor = "rgba(30, 40, 60, .3)";
+        ctx.shadowBlur = 14;
+        ctx.shadowOffsetY = 5;
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        (ctx.roundRect ? ctx.roundRect(left - g, top - g, w + g * 2, h + g, 4) : ctx.rect(left - g, top - g, w + g * 2, h + g));
+        ctx.fill();
+        ctx.restore();
+      }
+    },
+  };
+  if (window.Chart) Chart.register(popHover);
   const baseOpts = (extra = {}) => ({ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, ...extra });
   const legendOn = { legend: { display: true, position: "bottom" } };
   const noGrid = { grid: { display: false } };
@@ -285,17 +315,19 @@
       plugins: [valueLabels(f1)],
     });
     const list = A.fulls.slice(0, 30).reverse(), all = A.fulls.slice().reverse();
+    const trendMean = S.avg(list.map((r) => r.strokes));   // 이 그래프에 보이는 라운드의 평균
     chart("cTrend", {
       type: "line",
       data: {
         labels: list.map((r) => r.date.slice(2).replaceAll("-", ".")),
         datasets: [
-          { label: "총타수", data: list.map((r) => r.strokes), borderColor: "#ff8f8f", backgroundColor: "#ff8f8f", borderDash: [6, 4], pointRadius: 4, tension: 0 },
+          { label: "총타수", data: list.map((r) => r.strokes), borderColor: "#ff8f8f", backgroundColor: "#ff8f8f", borderDash: [6, 4], pointRadius: 2.5, pointHoverRadius: 5, tension: 0 },
+          { label: `평균 ${f1(trendMean)}`, data: list.map(() => trendMean), borderColor: "#9aa3b2", borderDash: [2, 3], borderWidth: 1, pointRadius: 0, noLabels: true },
           { label: "5R 이동평균", data: list.map((r) => { const i = all.indexOf(r); return S.avg(all.slice(Math.max(0, i - 4), i + 1).map((x) => x.strokes)); }), borderColor: "#7aa7f7", pointRadius: 0, tension: 0.2, noLabels: true },
         ],
       },
       options: baseOpts({ plugins: legendOn, scales: { y: { suggestedMin: 75, suggestedMax: 110 }, x: noGrid } }),
-      plugins: [valueLabels((v) => v)],
+      plugins: [valueLabels((v) => v, (v, j, ds) => (ds.label !== "총타수" ? null : v > trendMean ? UP : v < trendMean ? DOWN : null))],
     });
   }
 
@@ -310,12 +342,13 @@
     ["메모", [["memo", "메모", "text"]]],
   ];
   const FLAT = FIELDS.flatMap(([, fs]) => fs);
-  const TEE_ONLY = new Set(["fw", "miss", "drive"]);   // 파4·파5 티샷에만 해당하는 칸
+  const TEE_ONLY = new Set(["fw", "miss"]);   // 파4·파5 티샷에만 해당하는 칸(티샷 거리는 파3도 적되 드라이버 평균에서는 뺀다)
   // 홀 표시: 파3은 짧은 홀 '.', 파5는 긴 홀 '-' (파4는 표시 없음)
   const parMark = (p) => (p === 3 ? `<em class="pb p3" title="파3(짧은 홀)">.</em>` : p === 5 ? `<em class="pb p5" title="파5(긴 홀)">-</em>` : "");
   const TEXT_KEYS = new Set(["miss", "gmiss", "memo"]);
   const HINT = {
     dist: "실제로 친 티 기준(m)",
+    drive: "파3도 적어 두세요(드라이버 평균에는 파4·파5만)",
     score: "파=0, 보기=1, 더블=2, 버디=-1", fw: "파4·파5만", miss: "L 왼쪽 / R 오른쪽 / H 훅 / S 슬라이스 / - 없음",
     ong: "그린에 올라가기까지 친 타수(벌타 포함). 비우면 타수−퍼트로 계산", sg: "자동: 그린 놓친 홀에서 1퍼트로 막았거나 첫 퍼트 2m 이내면 ○",
     gmiss: "그린을 놓친 방향", appr: "그린을 놓쳤을 때 핀까지 남은 거리",
@@ -574,7 +607,7 @@
       return "";
     };
     const half = (a, name) => `<div class="tbl-wrap card-tbl" style="margin-top:8px"><table>
-      <thead><tr><th class="l">${name}</th>${Array.from({ length: 9 }, (_, i) => { const p = hm[a + i]?.par; return `<th>${a + i}${parMark(p)}</th>`; }).join("")}<th>${a === 1 ? "OUT" : "IN"}</th></tr></thead>
+      <thead><tr><th class="l">${name}</th>${Array.from({ length: 9 }, (_, i) => { const p = hm[a + i]?.par; return `<th>${parMark(p)}${a + i}</th>`; }).join("")}<th>${a === 1 ? "OUT" : "IN"}</th></tr></thead>
       <tbody>${rowsUsed.map(([k, lab, how]) => `<tr><th class="l">${lab}</th>${Array.from({ length: 9 }, (_, i) => cell(a + i, k)).join("")}<td><b>${tot(a, k, how || (k === "gir" ? "gir" : ""))}</b></td></tr>`).join("")}</tbody></table></div>`;
     return half(1, "전반") + half(10, "후반");
   }
@@ -711,12 +744,16 @@
       data: {
         labels: TB.buckets.map((b) => b.k),
         datasets: [
-          { type: "line", label: "평균 타수", data: TB.buckets.map((b) => b.avg), borderColor: "#ff8f8f", backgroundColor: "#ff8f8f", yAxisID: "y", pointRadius: 4, tension: 0, spanGaps: true },
+          { type: "line", label: "평균 타수", data: TB.buckets.map((b) => b.avg), borderColor: "#ff8f8f", backgroundColor: "#ff8f8f", yAxisID: "y", pointRadius: 2.5, pointHoverRadius: 5, tension: 0, spanGaps: true },
           { type: "bar", label: "라운드 수", data: TB.buckets.map((b) => b.n), backgroundColor: "rgba(122,167,247,.45)", yAxisID: "y1" },
         ],
       },
       options: baseOpts({ plugins: legendOn, scales: { y: { position: "left", suggestedMin: 80, suggestedMax: 105, ...noGrid }, y1: { position: "right", beginAtZero: true, ...noGrid, ticks: { precision: 0 } }, x: noGrid } }),
-      plugins: [valueLabels((v) => (Number.isInteger(v) ? v : v.toFixed(1)))],
+      plugins: [valueLabels((v) => (Number.isInteger(v) ? v : v.toFixed(1)), (v, j, ds) => {
+        if (ds.type !== "line") return null;
+        const m = S.avg(TB.buckets.map((b) => b.avg).filter(isNum));
+        return v > m ? UP : v < m ? DOWN : null;
+      })],
     });
     chart("cBand", { type: "bar", data: { labels: bands.map((b) => b.l), datasets: [{ data: bands.map((b) => b.n), backgroundColor: "#7fd1ae" }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ...noGrid }, x: noGrid } }), plugins: [valueLabels((v) => v)] });
     bindFilter();
@@ -974,6 +1011,7 @@
 
       <h2>버전 <span class="muted">v${APP_VERSION}</span></h2>
       <div class="card">${APP_CHANGES.map((c) => `<h3 class="mt0">v${c.v} <span class="muted">${c.date}</span></h3><ul>${c.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")}
+        <p class="legend-note">이전 버전 화면 보기(읽기 전용): ${APP_CHANGES.filter((c) => c.v !== APP_VERSION).map((c) => `<a href="v${c.v}/" target="_blank" rel="noopener">v${c.v}</a>`).join(" · ")} — 주소 뒤에 <code>/v1.0</code>처럼 붙여도 됩니다.</p>
         <p class="legend-note">작은 변경은 1.1, 1.2 …, 큰 개편은 2.0으로 올립니다. 새 버전이 나오면 화면 아래에 「새 버전이 있습니다 — 지금 적용」이 뜹니다.</p></div>
 
       <h2>백업</h2>
