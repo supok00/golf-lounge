@@ -491,7 +491,7 @@
   }
 
   // v2 「스코어카드」와 같은 행 구성
-  const CARD_ROWS = [["dist", "거리 (m)", "sum"], ["hcp", "핸디캡"], ["par", "Par", "sum"], ["score", "Score (+/-)", "sum"], ["fw", "FW 안착", "fw"], ["miss", "티샷 미스"], ["drive", "티샷 거리"], ["ong", "온그린 타수"], ["gir", "GIR"], ["putts", "Putts", "sum"], ["fp", "1st 퍼트 (m)"], ["gmiss", "그린 미스"], ["appr", "어프로치 (m)"], ["bunker", "벙커샷", "sum"], ["sg", "숏게임"], ["pen", "벌타", "sum"], ["memo", "메모"]];
+  const CARD_ROWS = [["dist", "거리 (m)", "sum"], ["hcp", "핸디캡"], ["par", "Par", "sum"], ["score", "Score (+/-)", "sum"], ["fw", "FW 안착", "fw"], ["miss", "티샷 미스"], ["drive", "티샷 거리 (m)", "avg"], ["ong", "온그린 타수"], ["gir", "GIR"], ["putts", "Putts", "sum"], ["fp", "1st 퍼트 (m)"], ["gmiss", "그린 미스"], ["appr", "어프로치 (m)"], ["bunker", "벙커샷", "sum"], ["sg", "숏게임"], ["pen", "벌타", "sum"], ["memo", "메모"]];
   function scorecard(r, compact) {
     const hm = Object.fromEntries((r.holes || []).map((h) => [h.h, h]));
     const used = new Set(r.holes.flatMap((h) => Object.keys(h)));
@@ -509,6 +509,8 @@
     const tot = (a, k, how) => {
       const xs = Array.from({ length: 9 }, (_, i) => hm[a + i]?.[k]);
       if (how === "sum") { const n = xs.filter(isNum); return n.length ? S.sum(n) : ""; }
+      // 티샷 거리 평균은 드라이버를 치는 파4·파5만(파3 아이언 티샷은 뺀다)
+      if (how === "avg") { const n = Array.from({ length: 9 }, (_, i) => hm[a + i]).filter((h) => h && isNum(h.drive) && h.drive > 0 && (!isNum(h.par) || h.par > 3)).map((h) => h.drive); return n.length ? `평균 ${Math.round(S.avg(n))}` : ""; }
       if (how === "fw") { const n = xs.filter(isNum); return n.length ? `${n.filter((v) => v === 1).length}/${n.length}` : ""; }
       if (k === "gir") { const g = Array.from({ length: 9 }, (_, i) => (hm[a + i] ? S.holeGir(hm[a + i]) : null)).filter((v) => v !== null); return g.length ? `${S.sum(g)}/${g.length}` : ""; }
       return "";
@@ -525,10 +527,10 @@
     app.innerHTML = `${head("rounds")}
       <div class="row" style="justify-content:space-between"><h2>라운드 목록 <span class="muted">${list.length}회</span></h2><a class="btn" href="#/input">+ 새 라운드</a></div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>날짜</th><th class="l">골프장</th><th>홀</th><th>총타수</th><th>오버</th><th>전반</th><th>후반</th><th>퍼트</th><th>GIR</th><th>FW</th><th>더블+</th><th>벌타</th></tr></thead>
+        <thead><tr><th>날짜</th><th class="l">골프장</th><th>홀</th><th>총타수</th><th>오버</th><th>전반</th><th>후반</th><th>퍼트</th><th>GIR</th><th>FW</th><th>드라이버</th><th>더블+</th><th>벌타</th></tr></thead>
         <tbody>${list.map((r) => {
           const s = S.round(r);
-          return `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}</td><td class="l">${esc(r.course)}</td><td>${s.holes}</td><td><b>${s.strokes ?? "-"}</b></td><td>${sgn(s.over, 0)}</td><td>${s.front ?? "-"}</td><td>${s.back ?? "-"}</td><td>${s.detail ? s.putts : "-"}</td><td>${s.detail ? pct(s.girp) : "-"}</td><td>${pct(s.fwp)}</td><td>${s.dbl}</td><td>${s.detail && isNum(s.pen) ? s.pen : "-"}</td></tr>`;
+          return `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}</td><td class="l">${esc(r.course)}</td><td>${s.holes}</td><td><b>${s.strokes ?? "-"}</b></td><td>${sgn(s.over, 0)}</td><td>${s.front ?? "-"}</td><td>${s.back ?? "-"}</td><td>${s.detail ? s.putts : "-"}</td><td>${s.detail ? pct(s.girp) : "-"}</td><td>${pct(s.fwp)}</td><td>${isNum(s.drive) ? Math.round(s.drive) + "m" : "-"}</td><td>${s.dbl}</td><td>${s.detail && isNum(s.pen) ? s.pen : "-"}</td></tr>`;
         }).join("")}</tbody>
       </table></div>`;
     app.querySelectorAll("tr[data-id]").forEach((tr) => tr.addEventListener("click", () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
@@ -547,6 +549,7 @@
         ${kpi("총타수", s.strokes ?? "-", s.full ? `전반 ${s.front} / 후반 ${s.back}` : `${s.holes}홀 입력`)}
         ${kpi("오버파", sgn(s.over, 0), `버디+ ${s.birdie} / 파 ${s.parn} / 보기 ${s.bogey}`)}
         ${kpi("더블+", s.dbl, `초과타 ${s.blow}`)}
+        ${isNum(s.drive) ? kpi("드라이버 평균", Math.round(s.drive) + "m", `최장 ${s.driveMax}m · ${s.driveN}홀`) : ""}
         ${s.detail ? kpi("퍼트", s.putts, `3퍼트 ${s.p3} / 1퍼트 ${s.onep}`) + kpi("GIR", pct(s.girp), `스크램블 ${pct(s.scrp)}`) + kpi("FW", pct(s.fwp), `벌타 ${s.pen ?? "-"}`) : ""}
       </div>
       ${s.checks.length ? `<div class="notice" style="margin-top:10px">기록 확인: ${s.checks.join(", ")}번 홀은 온그린 타수 + 퍼트가 타수와 다릅니다.</div>` : ""}
@@ -817,6 +820,18 @@
           AP.map((x) => [x.label + (x.dist ? ` <span class="muted">${x.dist}m</span>` : ""), x.n, sgn(x.over), pct(x.gir), pct(x.dbl)]),
           `홀 거리와 <a href="#/settings">내 클럽 거리</a>로 그린을 노린 클럽을 추정했습니다(티샷은 드라이버 평균 거리, 파5는 웨지 거리를 남기는 레이업으로 가정). 실제 친 클럽과 다를 수 있으니 경향만 보세요. GIR이 유난히 낮은 클럽이 연습 1순위입니다.${Clubs.isDefault(settings) ? " <b>지금은 예시 클럽 거리</b>로 계산했습니다." : ""}`);
       })()}
+      ${(() => {
+        const DV = D.drive;
+        const recent = S.byRecent((typeof fr !== "undefined" ? fr : rounds).map(S.round)).filter((r) => isNum(r.drive)).slice(0, 5);
+        const r5 = S.avg(recent.map((r) => r.drive));
+        return `<h3>⑩ 드라이버 거리 <span class="muted">파4·파5 티샷</span></h3>
+          <div class="kpis">
+            ${kpi("평균 거리", isNum(DV.avg) ? Math.round(DV.avg) + "m" : "-", `${DV.n}홀 기록`)}
+            ${kpi("최근 5R 평균", isNum(r5) ? Math.round(r5) + "m" : "-", `${recent.length}라운드`)}
+            ${kpi("최장 거리", DV.max ? DV.max + "m" : "-", "기록 중 가장 먼 티샷")}
+          </div>` + t("", ["거리대", "홀 수", "FW 안착", "평균 Score", "더블+ 비율"], DV.bands.map((x) => [x.l, x.n, pct(x.fwp), sgn(x.over), pct(x.dbl)]),
+          "홀 입력의 「티샷 거리」를 적은 파4·파5 홀만 집계합니다. 멀리 칠수록 FW 안착이 떨어지고 스코어가 나빠지면, 거리보다 방향(컨트롤 샷)을 우선하는 편이 낫습니다. 평균 거리는 설정 → 내 클럽 거리의 드라이버 값으로 쓸 수 있습니다.");
+      })()}
       ${t("⑦ 그린 미스 · 어프로치 거리", ["", "홀 수", "평균 Score", "스크램블%"], D.green.map((x) => [x.l, x.n, sgn(x.over), x.scr === null ? "-" : pct(x.scr)]), "짧음이 대부분이면 한 클럽 길게, 30m 이상에서 스크램블이 낮으면 하프 웨지 거리 연습을 우선합니다.")}`;
     document.getElementById("scope").onchange = (e) => { location.hash = "#/detail" + (e.target.value ? "?r=" + encodeURIComponent(e.target.value) : ""); };
     chart("cFp", { type: "bar", data: { labels: D.fp.map((x) => x.l), datasets: [{ label: "1퍼트율", data: D.fp.map((x) => x.one), backgroundColor: "#7fd1ae" }, { label: "3퍼트율", data: D.fp.map((x) => x.three), backgroundColor: "#ff8f8f" }] }, options: baseOpts({ plugins: legendOn, scales: { y: { beginAtZero: true, ticks: { callback: (v) => Math.round(v * 100) + "%" }, ...noGrid }, x: noGrid } }), plugins: [valueLabels(pct)] });
@@ -889,6 +904,12 @@
       ${Clubs.isDefault(settings) ? `<div class="notice">지금은 <b>예시값</b>입니다. 내 평균 거리로 바꾸고 저장하세요. 연습장이나 스마트 거리측정 기록의 '평소 거리'를 넣으면 됩니다(최고 거리 아님).</div>` : ""}
       <div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>사용</th><th class="l">클럽</th><th>거리(m)</th></tr></thead>
         <tbody>${(Array.isArray(settings.clubs) ? settings.clubs : Clubs.DEFAULT_BAG).map((c, i) => `<tr><td><input type="checkbox" data-con="${i}" ${c.on ? "checked" : ""}></td><td class="l"><input data-clab="${i}" value="${esc(c.label)}" style="width:170px"></td><td><input data-cdist="${i}" type="number" inputmode="numeric" step="5" min="0" value="${c.dist}" style="width:84px"></td></tr>`).join("")}</tbody></table></div>
+      ${(() => {
+        const ds = S.analyze(rounds, settings).rs.filter((r) => isNum(r.drive));
+        const n = S.sum(ds.map((r) => r.driveN));
+        const v = n ? Math.round(S.sum(ds.map((r) => r.drive * r.driveN)) / n) : null;
+        return v ? `<p class="legend-note">📏 기록된 드라이버 평균 거리: <b>${v}m</b> (파4·파5 티샷 ${n}홀) <button class="link" id="bUseDrive" data-v="${v}" type="button">드라이버 거리에 적용</button></p>` : "";
+      })()}
       <div id="gapBox" style="margin-top:8px"></div>
       <div class="row" style="margin-top:10px"><button class="btn" id="bSaveClubs" type="button" ${G.canWrite() ? "" : "disabled"}>클럽 거리 GitHub에 저장</button><button class="btn ghost" id="bClubDefault" type="button">예시값으로</button></div>
       <p class="legend-note">저장하면 라운드 입력의 <b>공략 가이드</b>와 상세 분석 <b>⑨ 예상 어프로치 클럽별</b>에 쓰입니다. 안 쓰는 클럽은 「사용」을 끄세요.</p>
@@ -966,6 +987,14 @@
       $("gapBox").innerHTML = gs.length ? `<div class="notice"><b>클럽 간격 점검</b><br>${gs.map((g) => `· [${g.type}] ${esc(g.text)}`).join("<br>")}</div>` : `<p class="legend-note ok">클럽 간 거리 간격이 고릅니다.</p>`;
     };
     app.querySelectorAll("[data-con],[data-clab],[data-cdist]").forEach((el) => el.addEventListener("input", drawGaps));
+    if ($("bUseDrive")) $("bUseDrive").onclick = () => {
+      const i = baseClubs.findIndex((c) => c.key === "D");
+      const el = i >= 0 && app.querySelector(`[data-cdist="${i}"]`);
+      if (!el) return toast("클럽 목록에 드라이버가 없습니다.");
+      el.value = $("bUseDrive").dataset.v;
+      drawGaps();
+      toast("드라이버 거리를 바꿨습니다. 「클럽 거리 GitHub에 저장」을 눌러야 저장됩니다.", 4000);
+    };
     drawGaps();
     $("bSaveClubs").onclick = async () => {
       settings.clubs = readClubs();

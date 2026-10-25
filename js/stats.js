@@ -97,7 +97,11 @@ const GolfStats = (() => {
     out.fwp = ratio(out.fw, fws.length);
     out.teeL = hs.filter((h) => missSide(h.miss) === "L").length;
     out.teeR = hs.filter((h) => missSide(h.miss) === "R").length;
-    out.drive = avg(hs.filter((h) => isNum(h.drive) && h.drive > 0).map((h) => h.drive));
+    // 드라이버 거리: 파4·파5 티샷만(파3 티샷은 아이언이라 섞으면 평균이 내려간다)
+    const drv = hs.filter((h) => isNum(h.drive) && h.drive > 0 && (!isNum(h.par) || h.par > 3)).map((h) => h.drive);
+    out.drive = avg(drv);
+    out.driveN = drv.length;
+    out.driveMax = drv.length ? Math.max(...drv) : null;
     out.bunker = hs.some((h) => isNum(h.bunker)) ? sum(hs.filter((h) => isNum(h.bunker)).map((h) => h.bunker)) : null;
     out.checks = hs.filter(holeCheck).map((h) => h.h);
     for (const p of [3, 4, 5]) out["p" + p + "avg"] = avg(hs.filter((h) => h.par === p).map((h) => h.score));
@@ -220,6 +224,18 @@ const GolfStats = (() => {
         const x = band(hs, "appr", a, b);
         return { l, n: x.length, over: avg(x.map((h) => h.score)), scr: scr(x) };
       })),
+      // 드라이버(파4·파5 티샷) 거리대별 FW 안착·스코어
+      drive: (() => {
+        const x = hs.filter((h) => isNum(h.drive) && h.drive > 0 && (!isNum(h.par) || h.par > 3));
+        const row = (l, list) => {
+          const fw = list.filter((h) => isNum(h.fw));
+          return { l, n: list.length, fwp: ratio(fw.filter((h) => h.fw === 1).length, fw.length), over: avg(list.map((h) => h.score)), dbl: ratio(list.filter((h) => h.score >= 2).length, list.length) };
+        };
+        return {
+          n: x.length, avg: avg(x.map((h) => h.drive)), max: x.length ? Math.max(...x.map((h) => h.drive)) : null,
+          bands: [["180m 미만", 0, 180], ["180~200m", 180, 200], ["200~220m", 200, 220], ["220m 이상", 220, 9999]].map(([l, a, b]) => row(l, x.filter((h) => h.drive >= a && h.drive < b))),
+        };
+      })(),
       // 거리(실제로 친 티 기준)가 기록된 홀만. 긴 홀과 짧은 홀 중 어디서 타수를 잃는지 본다
       len: (() => {
         const lenRow = (l, x) => {
