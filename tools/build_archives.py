@@ -50,6 +50,13 @@ def build(tag, ver):
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         tf.extractall(out, filter="data")
 
+    # 2026.10.25 버전 번호를 다시 매겨(예전 1.13 → 0.9 …) 옛 커밋의 version.js에는 옛 번호가 들어 있다.
+    # 지금 version.js를 넣고 그 버전으로 바꿔, 화면의 버전 표시와 변경 내역이 새 번호와 맞게 한다.
+    cur_src = (ROOT / "js/version.js").read_text(encoding="utf-8")
+    cur_src = re.sub(r'const APP_VERSION = "[\d.]+";', f'const APP_VERSION = "{ver}";', cur_src, count=1)
+    cur_src += f'\n// 이전 버전 화면: 이 버전보다 새 변경 내역은 뺀다\nAPP_CHANGES.splice(0, Math.max(0, APP_CHANGES.findIndex((c) => c.v === "{ver}")));\n'
+    (out / "js/version.js").write_text(cur_src, encoding="utf-8")
+
     gh = out / "js/github.js"
     gh.write_text(sub_once(gh.read_text(encoding="utf-8"), "const canWrite = () => !!cfg().token;",
                            "const canWrite = () => false;   // 이전 버전은 보기 전용", "github.js"), encoding="utf-8")

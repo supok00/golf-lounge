@@ -1,4 +1,5 @@
-/* GitHub 저장소를 데이터 저장소로 쓴다. 세 저장소(golf-round-web, mygolf, golf-lounge)의 data/를 동기화한다.
+/* GitHub 저장소를 데이터 저장소로 쓴다. 2026-10-25부터 golf-lounge 하나로 관리한다
+ * (예전 golf-round-web·mygolf와의 동기화는 끊음 — 그쪽은 보기 전용 안내 페이지로 남김).
  * - 읽기: 기본 저장소(PRIMARY)의 파일을 GitHub API로 읽는다(공개 저장소라 토큰 없이도 가능).
  *         API 한도(시간당 60회/IP)에 걸리면 같은 사이트에 배포된 파일을 쓴다.
  * - 쓰기: 같은 변경(라운드 추가·수정·삭제)을 기본 저장소와 동기화 저장소(MIRRORS)의 최신 파일에 각각 적용해 커밋한다.
@@ -12,7 +13,7 @@ const GitHubStore = (() => {
   const APP_KEY = "lounge";
   const ORIGIN_OWNER = "supok00";
   const ORIGIN = { owner: ORIGIN_OWNER, repo: "golf-lounge", branch: "main" };
-  const ORIGIN_MIRRORS = [{ owner: ORIGIN_OWNER, repo: "mygolf", branch: "main" }, { owner: ORIGIN_OWNER, repo: "golf-round-web", branch: "main" }];
+  const ORIGIN_MIRRORS = [];   // 동기화 대상 없음. 다시 여러 저장소에 저장하려면 여기에 { owner, repo, branch }를 넣는다.
   function detect() {
     const host = location.hostname.toLowerCase();
     if (!host.endsWith(".github.io")) return ORIGIN;            // 로컬 개발 등은 원래 저장소
@@ -196,7 +197,7 @@ const GitHubStore = (() => {
     for (const dst of all.filter((r) => r !== src)) await updateRepo(dst, () => s.data, `${label(src)} 기준으로 데이터 동기화`, path);
     try { localStorage.removeItem(KEY_PENDING); } catch { /* 무시 */ }
   }
-  const pending = () => { try { return localStorage.getItem(KEY_PENDING) === "1"; } catch { return false; } };
+  const pending = () => { if (!MIRRORS.length) return false; try { return localStorage.getItem(KEY_PENDING) === "1"; } catch { return false; } };
 
   async function testToken() {
     const results = [];
