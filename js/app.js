@@ -677,14 +677,21 @@
           const best = Math.min(...rows.map((q) => q.hm[h]).filter(isNum));
           const solo = rows.filter((q) => q.hm[h] === best).length === 1;
           const d = isNum(par) ? v - par : null;
-          return `<td class="sc-cell ${d === null ? "" : d <= -1 ? "sc-m2" : d === 0 ? "sc-0" : d === 1 ? "sc-1" : d === 2 ? "sc-2" : "sc-3"}${v === best && solo ? " hw" : ""}">${v}</td>`;
-        }).join("")}<td><b>${(() => { const xs = Array.from({ length: 9 }, (_, i) => p.hm[a + i]); return xs.every(isNum) ? S.sum(xs) : ""; })()}</b></td></tr>`).join("")}</tbody></table></div>`;
+          return `<td class="sc-cell ${d === null ? "" : d <= -1 ? "sc-m2" : d === 0 ? "sc-0" : d === 1 ? "sc-1" : d === 2 ? "sc-2" : "sc-3"}${v === best && solo ? " hw" : ""}" title="${v}타">${d === null ? v : d > 0 ? "+" + d : d}</td>`;
+        }).join("")}<td><b>${(() => {
+          const hs = Array.from({ length: 9 }, (_, i) => a + i);
+          if (!hs.every((h) => isNum(p.hm[h]))) return "";
+          const st = S.sum(hs.map((h) => p.hm[h]));
+          if (!hs.every((h) => isNum(pars[h]))) return st;
+          const ov = st - S.sum(hs.map((h) => pars[h]));
+          return `${ov > 0 ? "+" + ov : ov}<br><span class="muted">${st}타</span>`;
+        })()}</b></td></tr>`).join("")}</tbody></table></div>`;
       const match = withHoles.map((p) => {
         let w = 0, l = 0, t = 0;
         for (let h = 1; h <= 18; h++) { const a = myHm[h], b = p.hm[h]; if (!isNum(a) || !isNum(b)) continue; if (a < b) w++; else if (a > b) l++; else t++; }
         return `<span class="pill">vs ${esc(p.name)} · 이긴 홀 <b>${w}</b> / 비긴 홀 ${t} / 진 홀 <b>${l}</b></span>`;
       }).join(" ");
-      html += half(1, "전반") + half(10, "후반") + `<p class="legend-note">숫자는 타수, 색은 Par 대비(초록 파·노랑 보기·주황 더블…). 테두리 칸은 그 홀 단독 1등. ${match}</p>`;
+      html += half(1, "전반") + half(10, "후반") + `<p class="legend-note">숫자는 Par 대비(0 파 · +1 보기 · +2 더블 · -1 버디), OUT·IN은 Par 대비 합과 타수. 테두리 칸은 그 홀 단독 1등. ${match}</p>`;
     }
     return html;
   }
