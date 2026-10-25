@@ -271,7 +271,8 @@
       </table></div>
       <p class="legend-note">판정: 「이상」 지표는 값이 목표와 같거나 크면, 「이하」 지표는 목표와 같거나 작으면 달성입니다. 최근 5R과 직전 라운드를 각각 판정하고, 강점·약점은 최근 5R 판정을 씁니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 퍼트/GIR/FW/스크램블/벌타는 퍼트를 기록한 상세 라운드(${A.dets.length}회) 기준입니다.</p>
       <div class="grid g2" style="margin-top:12px">
-        <div class="card"><h3 class="mt0">6영역 육각형 <span class="muted">최근 상세 5R vs 전체</span></h3><div class="chart-box tall"><canvas id="cRadar"></canvas></div></div>
+        <div class="card"><h3 class="mt0">6영역 육각형 <span class="muted">최근 상세 5R vs 전체</span></h3><div class="chart-box tall"><canvas id="cRadar"></canvas></div>
+          <p class="legend-note">초록: 퍼트를 기록한 최근 5라운드의 지표 <b>평균</b>을 점수로 바꾼 것 · 파랑: 상세 기록 전체 평균 · 주황 점선: 목표선(${settings.radarTarget}점). 각 점수는 설정의 0점·100점 기준으로 환산합니다.</p></div>
         <div class="card"><h3 class="mt0">라운드당 타수 손실 <span class="muted">최근 상세 5R</span></h3><div class="chart-box tall"><canvas id="cLoss"></canvas></div>
           <p class="legend-note">항목끼리 일부 겹칩니다(벌타 홀은 더블+가 되기 쉬움). 크기 비교로 연습 순서를 정하는 용도입니다.</p></div>
       </div>
@@ -297,7 +298,7 @@
           { label: "목표", data: rk.map(() => settings.radarTarget), borderColor: "#ffb27a", borderDash: [6, 4], backgroundColor: "transparent", pointRadius: 0 },
         ],
       },
-      options: baseOpts({ plugins: legendOn, scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, display: false }, pointLabels: { font: { size: 13, weight: "600" } } } } }),
+      options: baseOpts({ plugins: legendOn, scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, display: true, showLabelBackdrop: true, backdropColor: "rgba(255,255,255,.75)", color: "#8a93a6", font: { size: 10 } }, pointLabels: { font: { size: 13, weight: "600" } } } } }),
       plugins: [{
         id: "radarVals",
         afterDatasetsDraw(c) {
@@ -315,19 +316,19 @@
       plugins: [valueLabels(f1)],
     });
     const list = A.fulls.slice(0, 30).reverse(), all = A.fulls.slice().reverse();
-    const trendMean = S.avg(list.map((r) => r.strokes));   // 이 그래프에 보이는 라운드의 평균
+    // 5라운드 이동평균: 이 라운드까지의 최근 5개(18홀) 평균. 점수 색은 이 값과 비교한다(높으면 빨강, 낮으면 파랑)
+    const trendMA = list.map((r) => { const i = all.indexOf(r); return S.avg(all.slice(Math.max(0, i - 4), i + 1).map((x) => x.strokes)); });
     chart("cTrend", {
       type: "line",
       data: {
         labels: list.map((r) => r.date.slice(2).replaceAll("-", ".")),
         datasets: [
           { label: "총타수", data: list.map((r) => r.strokes), borderColor: "#ff8f8f", backgroundColor: "#ff8f8f", borderDash: [6, 4], pointRadius: 2.5, pointHoverRadius: 5, tension: 0 },
-          { label: `평균 ${f1(trendMean)}`, data: list.map(() => trendMean), borderColor: "#9aa3b2", borderDash: [2, 3], borderWidth: 1, pointRadius: 0, noLabels: true },
-          { label: "5R 이동평균", data: list.map((r) => { const i = all.indexOf(r); return S.avg(all.slice(Math.max(0, i - 4), i + 1).map((x) => x.strokes)); }), borderColor: "#7aa7f7", pointRadius: 0, tension: 0.2, noLabels: true },
+          { label: "5R 이동평균", data: trendMA, borderColor: "#7aa7f7", pointRadius: 0, tension: 0.2, noLabels: true },
         ],
       },
       options: baseOpts({ plugins: legendOn, scales: { y: { suggestedMin: 75, suggestedMax: 110 }, x: noGrid } }),
-      plugins: [valueLabels((v) => v, (v, j, ds) => (ds.label !== "총타수" ? null : v > trendMean ? UP : v < trendMean ? DOWN : null))],
+      plugins: [valueLabels((v) => v, (v, j, ds) => (ds.label !== "총타수" ? null : v > trendMA[j] ? UP : v < trendMA[j] ? DOWN : null))],
     });
   }
 
@@ -630,7 +631,9 @@
     const r = rounds.find((x) => x.id === id);
     if (!r) { app.innerHTML = `<p>라운드를 찾을 수 없습니다. <a href="#/rounds">목록으로</a></p>`; return; }
     const s = S.round(r);
-    const rad = S.analyze([r], settings).radar.score;
+    const R1 = S.analyze([r], settings).radar;   // 이 라운드 한 개의 지표 → 점수
+    const rad = R1.score;
+    const rawFmt = (k, v) => (!isNum(v) ? "-" : ["fw", "gir", "scr"].includes(k) ? pct(v) : k === "pph" ? v.toFixed(2) + "개" : k === "fp" ? v.toFixed(1) + "m" : v.toFixed(1) + "타");
     app.innerHTML = `
       <div class="row" style="justify-content:space-between">
         <h2>${dot(r.date)} ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join(" / "))}${r.tee ? " · " + esc(r.tee) : ""}</span></h2>
@@ -646,15 +649,36 @@
       ${s.checks.length ? `<div class="notice" style="margin-top:10px">기록 확인: ${s.checks.join(", ")}번 홀은 온그린 타수 + 퍼트가 타수와 다릅니다.</div>` : ""}
       ${scorecard(r, false)}
       ${r.memo ? `<p class="card" style="margin-top:12px">${esc(r.memo)}</p>` : ""}
-      ${s.detail ? `<div class="card" style="margin-top:12px"><h3 class="mt0">이 라운드 6영역</h3><div class="chart-box"><canvas id="cR"></canvas></div></div>` : ""}
+      ${s.detail ? `<div class="card" style="margin-top:12px"><h3 class="mt0">이 라운드 6영역</h3>
+        <div class="grid g2">
+          <div class="chart-box tall"><canvas id="cR"></canvas></div>
+          <div class="tbl-wrap"><table><thead><tr><th class="l">영역</th><th>이 라운드</th><th>점수</th><th>100점 기준(목표)</th></tr></thead>
+            <tbody>${Object.entries(settings.radar).map(([k, c]) => `<tr><td class="l"><b>${c.label}</b><br><span class="muted">${c.metric}</span></td><td>${rawFmt(k, R1.raw[k])}</td><td class="${isNum(rad[k]) ? (rad[k] >= settings.radarTarget ? "ok" : "ng") : ""}"><b>${rad[k] ?? "-"}</b></td><td class="muted">${rawFmt(k, c.full)}</td></tr>`).join("")}</tbody></table></div>
+        </div>
+        <p class="legend-note">이 라운드 <b>한 경기만</b>의 지표를 점수로 바꾼 것입니다(홈의 육각형은 최근 5라운드 평균이라 한 경기보다 덜 들쭉날쭉합니다). 주황 점선은 목표선 ${settings.radarTarget}점, 표의 「100점 기준」이 그 목표에 해당하는 실제 값입니다.</p></div>` : ""}
       <div id="delBox"></div>
       <p><a href="#/rounds">← 목록으로</a></p>`;
     if (s.detail) {
       const rk = Object.keys(settings.radar);
       chart("cR", {
         type: "radar",
-        data: { labels: rk.map((k) => settings.radar[k].label), datasets: [{ data: rk.map((k) => rad[k]), backgroundColor: "rgba(63,174,134,.22)", borderColor: "#3fae86" }, { data: rk.map(() => settings.radarTarget), borderColor: "#ffb27a", borderDash: [6, 4], backgroundColor: "transparent", pointRadius: 0 }] },
-        options: baseOpts({ scales: { r: { min: 0, max: 100, ticks: { display: false } } } }),
+        data: {
+          labels: rk.map((k) => settings.radar[k].label),
+          datasets: [
+            { label: "이 라운드", data: rk.map((k) => rad[k]), backgroundColor: "rgba(63,174,134,.22)", borderColor: "#3fae86", pointBackgroundColor: "#3fae86" },
+            { label: `목표 ${settings.radarTarget}점`, data: rk.map(() => settings.radarTarget), borderColor: "#ffb27a", borderDash: [6, 4], backgroundColor: "transparent", pointRadius: 0 },
+          ],
+        },
+        options: baseOpts({ plugins: legendOn, scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, display: true, showLabelBackdrop: true, backdropColor: "rgba(255,255,255,.75)", color: "#8a93a6", font: { size: 10 } }, pointLabels: { font: { size: 13, weight: "600" } } } } }),
+        plugins: [{
+          id: "radarVals1",
+          afterDatasetsDraw(c) {
+            const meta = c.getDatasetMeta(0), ctx = c.ctx;
+            ctx.save(); ctx.font = "700 12px Pretendard, sans-serif"; ctx.fillStyle = "#2f7d5b"; ctx.textAlign = "center";
+            meta.data.forEach((pt, i) => { const v = c.data.datasets[0].data[i]; if (isNum(v)) ctx.fillText(v, pt.x, pt.y - 8); });
+            ctx.restore();
+          },
+        }],
       });
     }
     document.getElementById("bDel").onclick = () => {
@@ -755,7 +779,29 @@
         return v > m ? UP : v < m ? DOWN : null;
       })],
     });
-    chart("cBand", { type: "bar", data: { labels: bands.map((b) => b.l), datasets: [{ data: bands.map((b) => b.n), backgroundColor: "#7fd1ae" }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ...noGrid }, x: noGrid } }), plugins: [valueLabels((v) => v)] });
+    chart("cBand", {
+      type: "doughnut",
+      data: { labels: bands.map((b) => b.l), datasets: [{ data: bands.map((b) => b.n), backgroundColor: ["#5b8def", "#3fae86", "#f2b33d", "#ff8f8f"], borderColor: "#fff", borderWidth: 2, hoverOffset: 10 }] },
+      options: baseOpts({ cutout: "55%", plugins: { legend: { display: true, position: "right" }, tooltip: { callbacks: { label: (x) => ` ${x.label}: ${x.raw}회 (${pct(A.fulls.length ? x.raw / A.fulls.length : null)})` } } } }),
+      plugins: [{
+        id: "donutVals",
+        afterDatasetsDraw(c) {
+          const ctx = c.ctx, meta = c.getDatasetMeta(0), tot = S.sum(c.data.datasets[0].data);
+          ctx.save(); ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.font = "800 12px Pretendard, sans-serif";
+          meta.data.forEach((arc, i) => {
+            const v = c.data.datasets[0].data[i];
+            if (!v) return;
+            const p = arc.tooltipPosition();
+            ctx.fillText(`${v}회`, p.x, p.y - 2);
+            ctx.font = "600 11px Pretendard, sans-serif"; ctx.fillText(pct(v / tot), p.x, p.y + 12); ctx.font = "800 12px Pretendard, sans-serif";
+          });
+          const area = c.chartArea, cx = (area.left + area.right) / 2, cy = (area.top + area.bottom) / 2;
+          ctx.fillStyle = "#2b3140"; ctx.font = "800 18px Pretendard, sans-serif"; ctx.fillText(`${tot}`, cx, cy + 2);
+          ctx.font = "600 11px Pretendard, sans-serif"; ctx.fillStyle = "#8a93a6"; ctx.fillText("18홀 라운드", cx, cy + 18);
+          ctx.restore();
+        },
+      }],
+    });
     bindFilter();
   }
 
