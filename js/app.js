@@ -197,14 +197,64 @@
   const head = (k) => filterBar() + desc(k);
 
   // ───────────── 라우팅 ─────────────
+  // ───────────── 정리 내역: golf-lounge에서 겹치던 것과 2026.10.26 정리 ─────────────
+  const REVIEW = [
+    ["등록 값", "숏게임 성공 ○/×", "GIR·퍼트·첫 퍼트 거리로 자동 판정되는 값을 또 고름", "칸은 두고 위 값으로 ○/× 자동 표시(직접 고르지 않음)"],
+    ["등록 값", "그린 미스 방향", "GIR 성공 홀에서는 의미 없음(늘 「-」)", "GIR 홀은 「해당 없음」으로 잠금"],
+    ["홈", "실력 진단 표와 7영역 육각형", "FW·GIR·스크램블·퍼트·3퍼트가 두 기준(목표·0~100점)에 따로", "한 표에 목표·판정·점수를 같이"],
+    ["홈", "강점·약점 목록", "실력 진단의 판정 열을 다시 나열", "「먼저 볼 것」: 1순위 손실·목표 미달·티샷 쏠림만"],
+    ["홈", "파 유형·전후반 문장", "홀·파 분석과 같은 내용", "홀·파 화면으로 안내"],
+    ["설정", "목표 기준값과 육각형 점수 기준", "같은 지표가 두 표, 단위도 다름(%와 0~1, 라운드당 퍼트와 홀당 퍼트)", "「지표 기준」 한 표, 같은 단위(%, 라운드당)"],
+    ["설정·홈", "퍼트 수(라운드당)와 홀당 퍼트", "같은 지표를 두 단위로", "한 줄(라운드당)로 표시"],
+    ["분석", "상세 분석 ④ 파 유형별", "홀·파 분석 「파 유형별」과 같은 표", "삭제"],
+    ["분석", "상세 분석 ⑥ 홀 난이도·전후반", "홀·파 성격의 표가 샷 분석에 있음", "홀·파로 옮김"],
+    ["분석", "통계 평균 타수 KPI", "홈 요약의 평균 타수와 같음", "삭제(표준편차·최근 10R·최저최고만)"],
+    ["분석·인사이트", "통계 「자주 가는 골프장」", "인사이트 지역별 골프장 표(방문·평균·베스트·최근)와 같은 열", "지역 표에 「전체 골프장」 칩으로 합침"],
+    ["인사이트", "최근 90일 라운드 표", "공통 필터 「최근 90일」 + 라운드 목록과 같음", "삭제(필터로 봄)"],
+    ["인사이트", "올해 골프장 KPI", "홈 「방문 골프장」·인사이트 요약 줄과 겹침", "삭제"],
+    ["홈·분석", "「타수 추이」 두 개", "이름은 같지만 내용이 다름(라운드별 / 기간별 평균)", "둘 다 두고 이름 구분: 홈 「라운드별」, 분석 「기간별 평균 타수」"],
+    ["메뉴", "통계·홀파·상세 분석 / 라운드 입력·붙여넣기", "비슷한 화면이 메뉴 10개로 흩어짐", "「분석」(스코어·홀파·샷) · 「라운드 입력」(직접·붙여넣기) 하위 탭, 메뉴 7개"],
+    ["등록 값", "티샷 미스 선택지", "L·R·H·S 영어 글자만 보임", "「L 왼쪽 · R 오른쪽 · H 훅 · S 슬라이스」로 표시(FW 안착·티샷 미스 두 칸은 유지)"],
+  ];
+  function reviewView() {
+    app.innerHTML = `<h2>중복 정리 내역 <span class="muted">2026.10.26</span></h2>
+      <p class="legend-note">등록 값·통계·분석·설정을 모두 훑어 같은 것을 두 번 묻거나 보여 주는 곳을 찾아 정리했습니다. 기록·저장 형식은 그대로입니다.</p>
+      <div class="tbl-wrap"><table><thead><tr><th class="l">위치</th><th class="l">겹치던 것</th><th class="l">왜 중복인가</th><th class="l">golf2에서</th></tr></thead>
+        <tbody>${REVIEW.map((r) => `<tr><td class="l"><span class="pill">${r[0]}</span></td><td class="l"><b>${r[1]}</b></td><td class="l wrap">${r[2]}</td><td class="l wrap">${r[3]}</td></tr>`).join("")}</tbody></table></div>
+      <h3>그대로 둔 것</h3>
+      <ul class="desc">
+        <li><b>거리·핸디캡</b>: 같은 골프장이면 라운드마다 같지만, 「이전 라운드 코스 정보 불러오기」로 한 번에 채워 입력 부담이 없어 유지.</li>
+        <li><b>지역</b>: 골프장마다 같은 값이지만, 라운드마다 입력하기로 정한 방식이라 유지(골프장을 적으면 자동 선택).</li>
+        <li><b>스코어 유형(홀 단위)과 스코어 구간(라운드 단위)</b>: 이름은 비슷하지만 세는 단위가 달라 유지.</li>
+        <li><b>FW 안착·티샷 미스 두 칸, 온그린 타수 칸</b>: 자동으로 채워지지만 직접 보고 고칠 수 있게 유지.</li>
+        <li><b>라운드 상세의 퍼트·GIR·FW 카드와 7영역 표</b>: 일부 겹치지만, 카드는 숫자·표는 점수 환산이라 유지.</li>
+      </ul>`;
+  }
+
+  // 메뉴를 줄이려고 비슷한 화면을 한 메뉴의 하위 탭으로 묶었다
+  const SUB = {
+    analysis: [["score", "스코어", () => statsView()], ["holes", "홀·파", () => holesView()], ["shots", "샷 분석", () => detailView()]],
+    register: [["input", "직접 입력", () => inputView(null)], ["paste", "붙여넣기·사진", () => importView()]],
+  };
   function route() {
     charts.forEach((c) => c.destroy());
     charts = [];
     const [, tab = "dashboard", arg] = location.hash.split("?")[0].split("/");
-    const active = tab === "round" || tab === "edit" ? "rounds" : tab;
+    // 예전 주소(#/stats 등)도 새 메뉴의 하위 탭으로 연다
+    const OLD = { stats: ["analysis", "score"], holes: ["analysis", "holes"], detail: ["analysis", "shots"], input: ["register", "input"], import: ["register", "paste"] };
+    const [grp, sub] = OLD[tab] || (SUB[tab] ? [tab, arg] : [null, null]);
+    const active = tab === "round" || tab === "edit" ? "rounds" : grp || tab;
     document.querySelectorAll("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.tab === active));
-    const views = { dashboard, input: () => inputView(null), edit: () => inputView(decodeURIComponent(arg || "")), rounds: roundsView, round: () => roundView(decodeURIComponent(arg || "")), stats: statsView, insights: insightsView, holes: holesView, detail: detailView, import: importView, guide: guideView, settings: settingsView };
-    (views[tab] || dashboard)();
+    const views = { dashboard, input: () => inputView(null), edit: () => inputView(decodeURIComponent(arg || "")), rounds: roundsView, round: () => roundView(decodeURIComponent(arg || "")), stats: statsView, insights: insightsView, holes: holesView, detail: detailView, import: importView, guide: guideView, settings: settingsView, review: reviewView };
+    const nav = document.getElementById("subnav");
+    if (grp) {
+      const list = SUB[grp], it = list.find((x) => x[0] === sub) || list[0];
+      nav.innerHTML = `<div class="subtabs">${list.map(([k, l]) => `<a href="#/${grp}/${k}" class="${k === it[0] ? "active" : ""}">${l}</a>`).join("")}</div>`;
+      it[2]();
+    } else {
+      nav.innerHTML = "";
+      (views[tab] || dashboard)();
+    }
     bindFilter();
     window.scrollTo(0, 0);
   }
@@ -240,6 +290,25 @@
     toast(fresh ? "빈 기록으로 시작합니다. 라운드 입력이나 붙여넣기 등록으로 첫 기록을 남겨 보세요." : "지금 기록 그대로 씁니다.", 4000);
     route();
   }
+  /* 같은 지표가 「목표 기준값」과 「육각형 점수 기준」 두 곳에 따로 있던 것을 한 줄로 묶는다.
+   * t: settings.targets 키(목표 판정), r: settings.radar 키(0~100점). 퍼트는 목표가 라운드당, 점수는 홀당이라 화면에서 라운드당(×18)으로 맞춘다. */
+  const UNI = [
+    { label: "평균 타수", t: "strokes", low: true },
+    { label: "파 이하 홀 수", t: "parlow" },
+    { label: "더블보기+ 홀 수", t: "dbl", low: true },
+    { label: "FW 안착", t: "fwp", r: "fw" },
+    { label: "GIR", t: "girp", r: "gir" },
+    { label: "스크램블", t: "scrp", r: "scr" },
+    { label: "퍼트 수", t: "putts", r: "pph", low: true },
+    { label: "3퍼트 수", t: "p3", r: "p3", low: true },
+    { label: "1st 퍼트 거리", r: "fp", low: true },
+    { label: "벌타", t: "pen", low: true },
+    { label: "위기관리(벌타+더블+ 초과타)", r: "crisis", low: true },
+  ];
+  // 설정 표에서 육각형 기준을 목표와 같은 단위로 보여 준다: 비율은 %, 홀당 퍼트는 라운드당
+  const PCT = new Set(["fw", "gir", "scr"]);
+  const RSCALE = { fw: 100, gir: 100, scr: 100, pph: 18 };
+  const uniFmt = (r, v) => (!isNum(v) ? "-" : r === "fp" ? v.toFixed(1) + "m" : v.toFixed(1));
   function dashboard() {
     const fr = frounds();
     const A = S.analyze(fr, settings);
@@ -255,6 +324,7 @@
     const frA = S.avg(A.fulls.map((r) => r.front)), bk = S.avg(A.fulls.map((r) => r.back));
     app.innerHTML = `
       ${welcomeBox()}
+      <div class="notice" style="margin-bottom:10px">🆕 겹치던 통계·분석·설정을 정리했습니다. <a href="#/review">무엇을 정리했나 보기 (${REVIEW.length}가지)</a></div>
       ${head("dashboard")}
       <h2>요약</h2>
       <div class="kpis">
@@ -264,28 +334,34 @@
         ${kpi("최근 5R 평균", f1(S.avg(A.fulls.slice(0, 5).map((r) => r.strokes))), "최근 18홀 5라운드")}
         ${kpi("방문 골프장", A.courses, "서로 다른 골프장")}
       </div>
-      <h2>실력 진단 <span class="muted">최근 5라운드 vs 목표</span></h2>
+      <h2>실력 진단 <span class="muted">최근 5라운드 · 목표 판정과 영역 점수를 한 표로</span></h2>
       <div class="tbl-wrap"><table>
-        <thead><tr><th class="l">지표</th><th>목표</th><th>전체 평균</th><th>최근 5R</th><th>판정<br><span class="muted">최근 5R</span></th><th>직전 라운드</th><th>판정<br><span class="muted">직전</span></th></tr></thead>
-        <tbody>${rows.map(({ t, m, ok, okLast }) => `<tr><td class="l"><b>${t.label}</b><br><span class="muted">${t.low ? "▼ 낮을수록 좋음" : "▲ 높을수록 좋음"}</span></td><td><b>${goalText(t)}</b></td><td class="muted">${fmtT(m.all, t.fmt)}</td>${valCell(m.r5, t, ok, true)}<td>${judge(ok)}</td>${valCell(m.last, t, okLast, false)}<td>${judge(okLast)}</td></tr>`).join("")}</tbody>
+        <thead><tr><th class="l">지표</th><th>목표</th><th>최근 5R</th><th>판정</th><th>점수</th><th>전체 평균</th></tr></thead>
+        <tbody>${UNI.map((u) => {
+          const t = u.t && settings.targets[u.t], m = u.t ? A.metric(u.t) : null;
+          const r5 = m ? m.r5 : A.radar.raw[u.r], all = m ? m.all : A.radarAll.raw[u.r];
+          const ok = t ? meets(r5, t) : null, sc = u.r ? A.radar.score[u.r] : null;
+          const fmt = (v) => (t ? fmtT(v, t.fmt) : uniFmt(u.r, v));
+          return `<tr><td class="l"><b>${u.label}</b>${u.r ? ` <span class="pill">${settings.radar[u.r].label}</span>` : ""}<br><span class="muted">${u.low ? "▼ 낮을수록 좋음" : "▲ 높을수록 좋음"}</span></td>
+            <td>${t ? `<b>${goalText(t)}</b>` : `<span class="muted">-</span>`}</td>${t ? valCell(r5, t, ok, true) : `<td><b>${fmt(r5)}</b></td>`}<td>${judge(ok)}</td>
+            <td class="${isNum(sc) ? (sc >= settings.radarTarget ? "ok" : "ng") : ""}">${isNum(sc) ? `<b>${sc}</b>` : "-"}</td><td class="muted">${fmt(all)}</td></tr>`;
+        }).join("")}</tbody>
       </table></div>
-      <p class="legend-note">판정: 「이상」 지표는 값이 목표와 같거나 크면, 「이하」 지표는 목표와 같거나 작으면 달성입니다. 최근 5R과 직전 라운드를 각각 판정하고, 강점·약점은 최근 5R 판정을 씁니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 퍼트/GIR/FW/스크램블/벌타는 퍼트를 기록한 상세 라운드(${A.dets.length}회) 기준입니다.</p>
+      <p class="legend-note">판정은 목표값 기준(최근 5R), 점수는 설정의 0점·100점 기준으로 바꾼 값입니다(오른쪽 육각형). 예전에는 두 표(실력 진단·육각형 기준)에 같은 지표가 따로 있었는데 하나로 합쳤습니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 나머지는 퍼트를 기록한 라운드(${A.dets.length}회) 기준.</p>
       <div class="grid g2" style="margin-top:12px">
         <div class="card"><h3 class="mt0">7영역 육각형 <span class="muted">최근 상세 5R vs 전체</span></h3><div class="chart-box tall"><canvas id="cRadar"></canvas></div>
-          <p class="legend-note">초록: 퍼트를 기록한 최근 5라운드의 지표 <b>평균</b>을 점수로 바꾼 것 · 파랑: 상세 기록 전체 평균 · 주황 점선: 목표선(${settings.radarTarget}점). 각 점수는 설정의 0점·100점 기준으로 환산합니다.</p></div>
+          <p class="legend-note">초록: 최근 5라운드 · 파랑: 전체 평균 · 주황 점선: 목표선(${settings.radarTarget}점).</p></div>
         <div class="card"><h3 class="mt0">라운드당 타수 손실 <span class="muted">최근 상세 5R</span></h3><div class="chart-box tall"><canvas id="cLoss"></canvas></div>
           <p class="legend-note">항목끼리 일부 겹칩니다(벌타 홀은 더블+가 되기 쉬움). 크기 비교로 연습 순서를 정하는 용도입니다.</p></div>
       </div>
-      <h2>강점 · 약점</h2>
+      <h2>먼저 볼 것</h2>
       <div class="card"><ul class="sw">
-        <li><span class="ok">강점</span> ${okList.length ? "목표 달성: " + okList.join(", ") : "목표를 달성한 지표가 아직 없습니다"}</li>
-        <li><span class="ng">약점</span> ${ngList.length ? "목표 미달: " + ngList.join(", ") : "모든 지표가 목표를 달성했습니다"}</li>
         ${lossTop ? `<li><span class="ng">1순위</span> 가장 많이 잃는 곳: ${lossTop.label} (최근 5R 라운드당 ${f1(lossTop.r5)}타)</li>` : ""}
-        ${ps.length ? `<li><b>파 유형</b> 파${ps[0]} 가장 안정(${sgn(H.byPar[ps[0]].over)}) / 파${ps.at(-1)} 가장 약함(${sgn(H.byPar[ps.at(-1)].over)}, 더블+ ${pct(H.byPar[ps.at(-1)].dbl)})</li>` : ""}
+        ${ngList.length ? `<li><span class="ng">목표 미달</span> ${ngList.join(", ")}</li>` : `<li><span class="ok">목표</span> 모든 지표 달성</li>`}
         ${A.tee.L + A.tee.R ? `<li><b>티샷 미스</b> 왼쪽(L·H) ${A.tee.L}회 / 오른쪽(R·S) ${A.tee.R}회${A.tee.R >= 2 * A.tee.L ? " → 오른쪽 쏠림(슬라이스 계열) 점검" : A.tee.L >= 2 * A.tee.R ? " → 왼쪽 쏠림(훅 계열) 점검" : ""}</li>` : ""}
-        ${isNum(frA) ? `<li><b>전·후반</b> 전반 평균 ${f1(frA)} / 후반 평균 ${f1(bk)}</li>` : ""}
+        <li class="muted">파 유형·전후반 비교는 <a href="#/analysis/holes">분석 → 홀·파</a>에 있습니다.</li>
       </ul></div>
-      <h2>타수 추이 <span class="muted">최근 18홀 30라운드</span></h2>
+      <h2>타수 추이 <span class="muted">라운드별 · 최근 18홀 30라운드 (기간별 평균은 분석 → 스코어)</span></h2>
       <div class="card"><div class="chart-box tall"><canvas id="cTrend"></canvas></div></div>`;
     const rk = Object.keys(settings.radar);
     chart("cRadar", {
@@ -347,6 +423,8 @@
   // 홀 표시: 파3은 짧은 홀 '.', 파5는 긴 홀 '-' (파4는 표시 없음)
   const parMark = (p) => (p === 3 ? `<em class="pb p3" title="파3(짧은 홀)">.</em>` : p === 5 ? `<em class="pb p5" title="파5(긴 홀)">-</em>` : "");
   const TEXT_KEYS = new Set(["miss", "gmiss", "memo"]);
+  // 고르는 값의 표시 이름(저장 값은 L·R·H·S·- 그대로)
+  const OPT_LABEL = { miss: { "-": "- 없음(FW)", L: "L 왼쪽", R: "R 오른쪽", H: "H 훅", S: "S 슬라이스" } };
   const HINT = {
     dist: "실제로 친 티 기준(m)",
     drive: "파3도 적어 두세요(드라이버 평균에는 파4·파5만)",
@@ -396,7 +474,7 @@
       const h = H[n], set = AUTO[n];
       let changed = false;
       for (const [k, v] of Object.entries(derive(h))) {
-        const manual = h[k] !== undefined && !set.has(k);
+        const manual = k !== "sg" && h[k] !== undefined && !set.has(k);   // 숏게임 성공은 늘 자동
         if (manual) continue;
         if (v === null) { if (set.has(k)) { delete h[k]; set.delete(k); changed = true; } continue; }
         if (h[k] !== v) { h[k] = v; changed = true; }
@@ -460,8 +538,12 @@
       // 파3은 드라이버 티샷이 없어 FW 안착·티샷 미스·티샷 거리가 해당 없다 → '-'로 잠근다
       if (TEE_ONLY.has(k) && H[cur].par === 3) return `<label class="f na">${lab}<select disabled><option>해당 없음</option></select><span class="hint">파3은 드라이버 티샷이 없음</span></label>`;
       const dis = "";
+      // 숏게임 성공: GIR을 놓친 홀에서 위 값(퍼트·첫 퍼트 거리)으로 자동 판정해 보여 주기만 한다
+      if (k === "sg") { const g = S.holeGir(H[cur]); return `<label class="f na auto">${lab} <span class="autotag">자동</span><select disabled><option>${g === 1 ? "해당 없음(GIR)" : v === 1 ? "○" : v === 0 ? "×" : ""}</option></select><span class="hint">${g === 1 ? "그린에 올린 홀" : HINT.sg}</span></label>`; }
+      // 그린에 올렸으면(GIR) 그린 미스 방향은 해당 없음
+      if (k === "gmiss" && S.holeGir(H[cur]) === 1) return `<label class="f na">${lab}<select disabled><option>해당 없음</option></select><span class="hint">GIR 성공 홀</span></label>`;
       let ctl;
-      if (type === "sel") ctl = `<select data-k="${k}" ${dis}><option value=""></option>${opts.map((o) => `<option value="${o}" ${String(v) === String(o) ? "selected" : ""}>${typeof o === "number" && o > 0 && k === "score" ? "+" + o : o}</option>`).join("")}</select>`;
+      if (type === "sel") ctl = `<select data-k="${k}" ${dis}><option value=""></option>${opts.map((o) => `<option value="${o}" ${String(v) === String(o) ? "selected" : ""}>${OPT_LABEL[k]?.[o] ?? (typeof o === "number" && o > 0 && k === "score" ? "+" + o : o)}</option>`).join("")}</select>`;
       else if (type === "ox") ctl = `<select data-k="${k}" ${dis}><option value=""></option><option value="1" ${v === 1 ? "selected" : ""}>○</option><option value="0" ${v === 0 ? "selected" : ""}>×</option></select>`;
       else if (type === "num") ctl = `<input data-k="${k}" type="number" inputmode="decimal" step="0.5" min="0" value="${v ?? ""}">`;
       else ctl = `<input data-k="${k}" value="${esc(v ?? "")}">`;
@@ -976,13 +1058,12 @@
 
       <h2>평균 · 안정성 <span class="muted">18홀 ${A.fulls.length}회</span></h2>
       <div class="kpis">
-        ${kpi("평균 타수", f1(ST?.avg), "18홀 평균")}
         ${kpi("최근 10R 평균", f1(ST?.last10), "최근 18홀 10라운드")}
         ${kpi("표준편차", isNum(ST?.sd) ? "±" + ST.sd.toFixed(1) : "-", "작을수록 점수가 안정적")}
         ${kpi("최저 · 최고", ST ? `${ST.min} · ${ST.max}` : "-", "베스트 · 워스트")}
       </div>
 
-      <h2>타수 추이 <span class="muted">${TB.unit}별</span></h2>
+      <h2>기간별 평균 타수 <span class="muted">${TB.unit}별 (라운드별 추이는 홈)</span></h2>
       <div class="chips" style="margin-bottom:8px"><button type="button" class="chip ${trendYear ? "" : "on"}" data-ty="">자동</button>${yr.map((r) => `<button type="button" class="chip ${trendYear === String(r.y) ? "on" : ""}" data-ty="${r.y}">${r.y}</button>`).join("")}</div>
       <div class="card"><div class="chart-box tall"><canvas id="cTB"></canvas></div></div>
 
@@ -1001,9 +1082,7 @@
       <div class="tbl-wrap"><table><thead><tr><th>연도</th><th>라운드</th><th>18홀</th><th>골프장 수</th><th>평균 타수</th><th>베스트</th><th>워스트</th></tr></thead>
         <tbody>${yr.map((r) => `<tr><td><b>${r.y}</b></td><td>${r.n}</td><td>${r.f}</td><td>${r.c}</td><td>${f1(r.avg)}</td><td>${r.best ?? "-"}</td><td>${r.worst ?? "-"}</td></tr>`).join("")}</tbody></table></div>
 
-      <h2>자주 가는 골프장 <span class="muted">${cs.length}곳</span></h2>
-      <div class="tbl-wrap"><table><thead><tr><th>순위</th><th class="l">골프장</th><th>방문</th><th>18홀 평균</th><th>베스트</th><th>최근 방문</th><th>최근 점수</th></tr></thead>
-        <tbody>${cs.map((r, i) => `<tr class="click" data-course="${esc(r.c)}"><td>${i + 1}</td><td class="l"><u>${esc(r.c)}</u></td><td>${r.n}</td><td>${f1(r.avg)}</td><td class="${A.best && r.best === A.best.strokes ? "ng" : ""}">${r.best ?? "-"}</td><td>${dot(r.last)}</td><td>${r.lastScore ?? "-"}</td></tr>`).join("")}</tbody></table></div>`;
+      <p class="legend-note">골프장별 방문·평균·베스트는 <a href="#/insights">인사이트 → 다녀온 지역</a>의 「전체」에 있습니다.</p>`;
 
     app.querySelectorAll("[data-st]").forEach((b) => (b.onclick = () => {
       const t = types.find((x) => x.key === b.dataset.st);
@@ -1079,7 +1158,7 @@
       <div class="card">
         ${(() => {
           const RS = Regions.summarize(A.rs, rounds);
-          const extra = ["해외", "미지정"].filter((k) => RS[k]).map((k) => `<button type="button" class="chip" data-reg="${k}">${k} ${RS[k].courses.length}곳</button>`).join(" ");
+          const extra = ["__all", "해외", "미지정"].filter((k) => k === "__all" || RS[k]).map((k) => k === "__all" ? `<button type="button" class="chip" data-reg="__all">전체 골프장 ${S.sum(Object.values(RS).map((x) => x.courses.length))}곳</button>` : `<button type="button" class="chip" data-reg="${k}">${k} ${RS[k].courses.length}곳</button>`).join(" ");
           const regs = Object.keys(RS).filter((k) => k !== "미지정");
           return `<div class="kmap-wrap"><div class="kmap-map">${Regions.svg(RS)}</div>
             <div class="kmap-side"><div class="kmap-total"><b>${regs.length}</b>개 지역 · <b>${S.sum(Object.values(RS).map((x) => x.courses.length))}</b>곳 골프장</div>${extra ? `<div class="row" style="margin-top:8px">${extra}</div>` : ""}
@@ -1101,23 +1180,21 @@
       <div class="kpis">
         ${kpi("평균 라운드 간격", isNum(I.avgGap) ? I.avgGap.toFixed(0) + "일" : "-", "라운드 사이 평균 일수")}
         ${kpi("주말 비중", pct(I.weekendShare), "토·일 라운드")}
-        ${kpi("올해 골프장", I.thisYear.courses + "곳", "올해 다녀온 곳")}
         ${I.ampm ? kpi("오전 / 오후", `${I.ampm.am.n} / ${I.ampm.pm.n}`, `평균 ${f1(I.ampm.am.avg)} / ${f1(I.ampm.pm.avg)}`) : kpi("오전 / 오후", "-", "티오프 시간 기록 없음")}
       </div>
       <div class="card" style="margin-top:12px"><h3 class="mt0">요일별 라운드</h3><div class="chart-box"><canvas id="cDow"></canvas></div></div>
-      <h2>최근 90일 <span class="muted">${I.d90.n}라운드${isNum(I.d90.avg) ? ` · 평균 ${f1(I.d90.avg)}` : ""}${I.d90.best ? ` · 베스트 ${I.d90.best}` : ""}</span></h2>
-      ${I.d90.list.length ? `<div class="tbl-wrap"><table><thead><tr><th>날짜</th><th class="l">골프장</th><th>타수</th><th>오버</th></tr></thead>
-        <tbody>${I.d90.list.map((r) => `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}${r.time ? " " + esc(r.time) : ""}</td><td class="l">${esc(r.course)}</td><td><b>${r.strokes ?? "-"}</b></td><td>${sgn(r.over, 0)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">최근 90일 라운드가 없습니다.</p>`}`;
+      <p class="legend-note">최근 90일 라운드는 위 필터의 「최근 90일」로 모든 화면에서 볼 수 있습니다.</p>`;
     app.querySelectorAll("tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
     // 지역 타일을 누르면 그 지역 골프장 목록
     const RS = Regions.summarize(A.rs, rounds);
     const showRegion = (reg) => {
-      const x = RS[reg];
+      // 「전체」: 예전 통계 → 자주 가는 골프장 표를 여기로 합침(지역 칸을 붙여서)
+      const x = reg === "__all" ? { rounds: S.sum(Object.values(RS).map((v) => v.rounds)), courses: Object.entries(RS).flatMap(([g, v]) => v.courses.map((c) => ({ ...c, g }))).sort((a, b) => b.n - a.n || (a.last < b.last ? 1 : -1)) } : RS[reg];
       app.querySelectorAll("[data-reg]").forEach((b) => b.classList.toggle("sel", b.dataset.reg === reg));
       if (!x) { document.getElementById("regionPanel").innerHTML = ""; return; }
-      document.getElementById("regionPanel").innerHTML = `<div class="region-panel"><div class="region-head">📍 ${reg} <span class="muted">골프장 ${x.courses.length}곳 · ${x.rounds}라운드</span></div>
+      document.getElementById("regionPanel").innerHTML = `<div class="region-panel"><div class="region-head">📍 ${reg === "__all" ? "전체" : reg} <span class="muted">골프장 ${x.courses.length}곳 · ${x.rounds}라운드</span></div>
         <div class="tbl-wrap"><table><thead><tr><th class="l">골프장</th><th>방문</th><th>18홀 평균</th><th>베스트</th><th>최근 방문</th><th>최근 점수</th></tr></thead>
-        <tbody>${x.courses.map((c) => `<tr class="click" data-course="${esc(c.course)}"><td class="l"><b>${esc(c.course)}</b></td><td>${c.n}</td><td>${f1(c.avg)}</td><td>${c.best ?? "-"}</td><td>${dot(c.last)}</td><td>${c.lastScore ?? "-"}</td></tr>`).join("")}</tbody></table></div>
+        <tbody>${x.courses.map((c) => `<tr class="click" data-course="${esc(c.course)}"><td class="l"><b>${esc(c.course)}</b>${c.g ? ` <span class="muted">${esc(c.g)}</span>` : ""}</td><td>${c.n}</td><td>${f1(c.avg)}</td><td>${c.best ?? "-"}</td><td>${dot(c.last)}</td><td>${c.lastScore ?? "-"}</td></tr>`).join("")}</tbody></table></div>
         <p class="legend-note">골프장을 누르면 그 골프장 라운드만 라운드 목록에서 봅니다.</p></div>`;
       document.querySelectorAll("#regionPanel [data-course]").forEach((tr) => (tr.onclick = () => { F.course = tr.dataset.course; ls.set(KEY_FILTER, F); location.hash = "#/rounds"; }));
     };
@@ -1388,7 +1465,10 @@
       <div class="card"><div class="chart-box"><canvas id="cHole"></canvas></div>
         <p class="legend-note">골프장마다 홀 구성이 달라 홀 난이도 비교가 아니라, 첫 홀(워밍업)·막판(체력·집중력) 같은 흐름 패턴을 보는 용도입니다. 빨강=가장 약함, 파랑=가장 좋음.</p></div>
       <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>홀</th><th>기록 수</th><th>평균 Par</th><th>평균 타수</th><th>평균 오버</th><th>파 이하</th><th>더블+</th></tr></thead>
-        <tbody>${H.byHole.map((x, i) => `<tr><td><b>${i + 1}</b></td><td>${x.n}</td><td>${f1(x.par)}</td><td>${f2(x.strokes)}</td><td class="${x.over === maxO ? "ng" : x.over === minO ? "ok" : ""}"><b>${sgn(x.over)}</b></td><td>${pct(x.parlow)}</td><td>${pct(x.dbl)}</td></tr>`).join("")}</tbody></table></div>`;
+        <tbody>${H.byHole.map((x, i) => `<tr><td><b>${i + 1}</b></td><td>${x.n}</td><td>${f1(x.par)}</td><td>${f2(x.strokes)}</td><td class="${x.over === maxO ? "ng" : x.over === minO ? "ok" : ""}"><b>${sgn(x.over)}</b></td><td>${pct(x.parlow)}</td><td>${pct(x.dbl)}</td></tr>`).join("")}</tbody></table></div>
+      ${(() => { const D = S.detailBlocks(frounds()); return D.hcp && D.hcp.length ? `<h2>홀 난이도 · 전후반 <span class="muted">핸디캡을 기록한 라운드</span></h2>
+        <div class="tbl-wrap"><table><thead><tr><th class="l"></th><th>홀 수</th><th>평균 Score</th></tr></thead><tbody>${D.hcp.map((x) => `<tr><td class="l">${x.l}</td><td>${x.n}</td><td>${sgn(x.over)}</td></tr>`).join("")}</tbody></table></div>
+        <p class="legend-note">쉬운 홀(핸디캡 13~18)에서도 평균 +1 이상이면 실수 관리 문제입니다. (예전 상세 분석 ⑥을 옮김)</p>` : ""; })()}`;
     chart("cPar", { type: "bar", data: { labels: ["파3", "파4", "파5"], datasets: [{ data: [3, 4, 5].map((p) => H.byPar[p].over), backgroundColor: "#ffb27a" }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ...noGrid }, x: noGrid } }), plugins: [valueLabels(f2)] });
     chart("cYearPar", { type: "line", data: { labels: H.byYearPar.map((y) => y.year), datasets: [["p3", "파3", "#7aa7f7"], ["p4", "파4", "#7fd1ae"], ["p5", "파5", "#ffb27a"]].map(([k, l, c]) => ({ label: l, data: H.byYearPar.map((y) => y[k]), borderColor: c, backgroundColor: c, pointRadius: 4, tension: 0 })) }, options: baseOpts({ plugins: legendOn, scales: { y: noGrid, x: noGrid } }), plugins: [valueLabels(f2)] });
     chart("cHole", { type: "bar", data: { labels: H.byHole.map((_, i) => i + 1), datasets: [{ data: H.byHole.map((h) => h.over), backgroundColor: H.byHole.map((h) => (h.over === maxO ? "#ff8f8f" : h.over === minO ? "#7aa7f7" : "#7fd1ae")) }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ...noGrid }, x: noGrid } }), plugins: [valueLabels(f1)] });
@@ -1410,9 +1490,7 @@
       ${t("② 그린 적중 (GIR)", ["", "홀 수", "평균 Score", "평균 퍼트"], [["GIR 성공", D.gir.hit.n, sgn(D.gir.hit.over), f2(D.gir.hit.putts)], ["GIR 실패", D.gir.miss.n, sgn(D.gir.miss.over), f2(D.gir.miss.putts)]], "GIR 실패 홀의 평균 Score가 +1.5 이상이면 그린 주변(어프로치·벙커)에서 타수가 크게 새고 있다는 뜻입니다.")}
       ${t("③ 첫 퍼트 거리대별", ["", "홀 수", "평균 퍼트", "1퍼트율", "3퍼트율"], D.fp.map((x) => [x.l, x.n, f2(x.putts), pct(x.one), pct(x.three)]), "3퍼트율이 높은 거리대가 거리감 연습 1순위입니다.")}
       <div class="card" style="margin-top:8px"><div class="chart-box"><canvas id="cFp"></canvas></div></div>
-      ${t("④ 파 유형별", ["", "홀 수", "평균 Score", "파 이하율", "더블+ 비율"], D.par.map((x) => ["파" + x.p, x.n, sgn(x.over), pct(x.parlow), pct(x.dbl)]), "파5 더블+가 많으면 '3온 전략(안전한 레이업)'을 검토합니다.")}
       ${t("⑤ 티샷 미스 방향", ["", "횟수", "비율", "평균 Score", "평균 벌타"], D.miss.map((x) => [x.l, x.n, pct(x.share), sgn(x.over), f2(x.pen)]), "한쪽으로 쏠림이 크면(예: R 60% 이상) 셋업·그립 점검 신호입니다.")}
-      ${t("⑥ 홀 난이도 · 전후반", ["", "홀 수", "평균 Score"], D.hcp.map((x) => [x.l, x.n, sgn(x.over)]), "쉬운 홀(핸디캡 13~18)에서도 평균 +1 이상이면 실수 관리 문제입니다. 핸디캡은 기록한 라운드만 집계됩니다.")}
       ${t("⑧ 홀 길이별 (실제로 친 티 거리)", ["", "홀 수", "평균 Score", "파 이하율", "더블+ 비율", "GIR"],
         [...D.len.p3.map((x) => ["파3 " + x.l, x.n, sgn(x.over), pct(x.parlow), pct(x.dbl), pct(x.gir)]),
          ...D.len.p4.map((x) => ["파4 " + x.l, x.n, sgn(x.over), pct(x.parlow), pct(x.dbl), pct(x.gir)]),
@@ -1451,7 +1529,8 @@
     isOrigin: G.IS_ORIGIN,
   };
   function guideView() {
-    app.innerHTML = Guide.render(GUIDE);
+    // 가이드 본문의 메뉴 이름 중 바뀐 것만 맨 위에 알려 준다(2026.10.26 메뉴 정리)
+    app.innerHTML = `<div class="notice" style="margin-bottom:12px"><b>메뉴 안내</b> — 가이드의 「통계」「홀·파 분석」「상세 분석」은 <b>분석</b> 메뉴의 스코어·홀파·샷 분석 탭, 「붙여넣기 등록」은 <b>라운드 입력</b> 메뉴의 붙여넣기·사진 탭입니다. 목표 기준값과 육각형 기준은 설정의 <b>지표 기준</b> 한 표입니다. <a href="#/review">정리 내역</a></div>` + Guide.render(GUIDE);
     Guide.bind(app);
   }
 
@@ -1494,14 +1573,16 @@
         <p class="legend-note">평소에는 저장할 때마다 자동으로 모든 저장소에 같이 반영됩니다. 네트워크 오류 등으로 어긋났을 때만 맞추기를 누르세요. 맞추기는 한쪽 내용으로 다른 쪽을 덮어씁니다.</p>
       </div>` : ""}
 
-      <h2>목표 기준값</h2>
-      <div class="tbl-wrap"><table><thead><tr><th class="l">지표</th><th>목표</th><th>방향</th></tr></thead>
-        <tbody>${Object.entries(tg).map(([k, t]) => `<tr><td class="l">${t.label}</td><td><input data-t="${k}" type="number" step="${t.fmt === "%" ? 1 : 0.5}" value="${t.fmt === "%" ? Math.round(t.v * 100) : t.v}" style="width:90px"> ${t.fmt === "%" ? "%" : ""}</td><td class="muted">${t.low ? "낮을수록 좋음" : "높을수록 좋음"}</td></tr>`).join("")}</tbody></table></div>
-      <h2>육각형 점수 기준 <span class="muted">0점 / 100점</span></h2>
-      <div class="tbl-wrap"><table><thead><tr><th class="l">영역</th><th class="l">지표</th><th>0점</th><th>100점</th></tr></thead>
-        <tbody>${Object.entries(rd).map(([k, x]) => `<tr><td class="l"><b>${x.label}</b></td><td class="l">${x.metric}</td><td><input data-rz="${k}" type="number" step="0.05" value="${x.zero}" style="width:80px"></td><td><input data-rf="${k}" type="number" step="0.05" value="${x.full}" style="width:80px"></td></tr>`).join("")}
-        <tr><td class="l"><b>목표선</b></td><td class="l">육각형 기준선 점수</td><td colspan="2"><input id="rTarget" type="number" value="${settings.radarTarget}" style="width:80px"></td></tr></tbody></table></div>
-      <p class="legend-note">기준값은 아마추어 핸디캡별 통계 경향을 참고한 가정값입니다(100점 ≈ 싱글~10 핸디캡, 0점 ≈ 초보). 비율은 0~1로 입력합니다.</p>
+      <h2>지표 기준 <span class="muted">목표(판정) · 0점 · 100점(육각형)</span></h2>
+      <div class="tbl-wrap"><table><thead><tr><th class="l">지표</th><th>목표</th><th>0점</th><th>100점</th></tr></thead>
+        <tbody>${UNI.map((u) => {
+          const t = u.t && tg[u.t], x = u.r && rd[u.r], k = RSCALE[u.r] || 1, unit = u.r && PCT.has(u.r) ? "%" : "";
+          const tIn = t ? `<input data-t="${u.t}" type="number" step="${t.fmt === "%" ? 1 : 0.5}" value="${t.fmt === "%" ? Math.round(t.v * 100) : t.v}" style="width:70px">${t.fmt === "%" ? " %" : ""}` : `<span class="muted">-</span>`;
+          const rIn = (w, v) => `<input data-${w}="${u.r}" type="number" step="${unit ? 1 : 0.1}" value="${+(v * k).toFixed(2)}" style="width:70px">${unit ? " %" : ""}`;
+          return `<tr><td class="l"><b>${u.label}</b>${x ? ` <span class="pill">${x.label}</span>` : ""}<br><span class="muted">${u.low ? "낮을수록 좋음" : "높을수록 좋음"}${u.r === "pph" ? " · 라운드(18홀)당" : ""}</span></td><td>${tIn}</td><td>${x ? rIn("rz", x.zero) : "-"}</td><td>${x ? rIn("rf", x.full) : "-"}</td></tr>`;
+        }).join("")}
+        <tr><td class="l"><b>육각형 목표선</b><br><span class="muted">점수 기준선</span></td><td colspan="3"><input id="rTarget" type="number" value="${settings.radarTarget}" style="width:70px"> 점</td></tr></tbody></table></div>
+      <p class="legend-note">기준값은 아마추어 핸디캡별 통계 경향을 참고한 가정값입니다(100점 ≈ 싱글~10 핸디캡, 0점 ≈ 초보). 비율은 %로, 퍼트는 라운드당으로 입력합니다(저장은 0~1·홀당 형식으로 바꿔서 함).</p>
       <div class="row" style="margin-top:10px"><button class="btn" id="bSaveSet" type="button" ${G.canWrite() ? "" : "disabled"}>기준값 GitHub에 저장</button><button class="btn ghost" id="bResetSet" type="button">기본값 불러오기</button></div>
 
       <h2>내 클럽 거리 <span class="muted">평균 거리(m), 굴러간 거리 포함</span></h2>
@@ -1570,8 +1651,8 @@
     $("bTokDel").onclick = () => { G.setCfg({ token: "" }); toast("이 기기에서 토큰을 지웠습니다."); renderStatus(); settingsView(); };
     $("bSaveSet").onclick = async () => {
       app.querySelectorAll("[data-t]").forEach((el) => { const t = tg[el.dataset.t]; const v = Number(el.value); if (el.value !== "" && isNum(v)) t.v = t.fmt === "%" ? v / 100 : v; });
-      app.querySelectorAll("[data-rz]").forEach((el) => { const v = Number(el.value); if (el.value !== "" && isNum(v)) rd[el.dataset.rz].zero = v; });
-      app.querySelectorAll("[data-rf]").forEach((el) => { const v = Number(el.value); if (el.value !== "" && isNum(v)) rd[el.dataset.rf].full = v; });
+      app.querySelectorAll("[data-rz]").forEach((el) => { const v = Number(el.value); if (el.value !== "" && isNum(v)) rd[el.dataset.rz].zero = v / (RSCALE[el.dataset.rz] || 1); });
+      app.querySelectorAll("[data-rf]").forEach((el) => { const v = Number(el.value); if (el.value !== "" && isNum(v)) rd[el.dataset.rf].full = v / (RSCALE[el.dataset.rf] || 1); });
       const rt = Number($("rTarget").value);
       if (isNum(rt)) settings.radarTarget = rt;
       try {
