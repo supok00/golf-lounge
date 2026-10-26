@@ -17,6 +17,7 @@ const GolfStats = (() => {
       gir: { label: "아이언", metric: "GIR 비율", zero: 0, full: 0.7 },
       scr: { label: "숏게임", metric: "스크램블", zero: 0, full: 0.6 },
       pph: { label: "퍼팅", metric: "홀당 퍼트", zero: 2.4, full: 1.75 },
+      p3: { label: "3퍼트", metric: "18홀당 3퍼트 수", zero: 4, full: 1 },
       fp: { label: "거리감", metric: "1st 퍼트 거리(m)", zero: 15, full: 5 },
       crisis: { label: "위기관리", metric: "18홀당 벌타+더블+ 초과타", zero: 12, full: 0 },
     },
@@ -77,6 +78,7 @@ const GolfStats = (() => {
       out.p3loss = sum(pt.map((h) => Math.max(0, h.putts - 2)));
       out.onep = pt.filter((h) => h.putts === 1).length;
       out.pph = out.putts / pt.length;
+      out.p3r = (out.p3 * 18) / pt.length;   // 18홀당 3퍼트 수(9홀만 기록한 라운드도 같은 잣대로 비교)
       const gs = hs.map(holeGir).filter((g) => g !== null);
       out.gir = sum(gs);
       out.girp = ratio(out.gir, gs.length);
@@ -115,7 +117,7 @@ const GolfStats = (() => {
   }
   const radarOf = (list, settings) => {
     const pick = (k) => avg(list.map((r) => r[k]).filter(isNum));
-    const raw = { fw: pick("fwp"), gir: pick("girp"), scr: pick("scrp"), pph: pick("pph"), fp: pick("fp"), crisis: pick("crisis") };
+    const raw = { fw: pick("fwp"), gir: pick("girp"), scr: pick("scrp"), pph: pick("pph"), p3: pick("p3r"), fp: pick("fp"), crisis: pick("crisis") };
     return { raw, score: Object.fromEntries(Object.keys(settings.radar).map((k) => [k, radarScore(k, raw[k], settings)])) };
   };
 
