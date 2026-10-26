@@ -4,7 +4,7 @@
    "label": "드라이빙",
    "metric": "FW 안착률",
    "zero": 0.25,
-   "full": 0.5
+   "full": 0.55
   },
   "gir": {
    "label": "아이언",
@@ -22,7 +22,7 @@
    "label": "퍼팅",
    "metric": "홀당 퍼트",
    "zero": 2.2,
-   "full": 1.75
+   "full": 1.72
   },
   "p3": {
    "label": "3퍼트",
