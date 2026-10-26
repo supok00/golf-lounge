@@ -4,25 +4,25 @@
    "label": "드라이빙",
    "metric": "FW 안착률",
    "zero": 0.25,
-   "full": 0.6
+   "full": 0.5
   },
   "gir": {
    "label": "아이언",
    "metric": "GIR 비율",
    "zero": 0,
-   "full": 0.3
+   "full": 0.5
   },
   "scr": {
    "label": "숏게임",
    "metric": "스크램블",
    "zero": 0,
-   "full": 0.3
+   "full": 0.4
   },
   "pph": {
    "label": "퍼팅",
    "metric": "홀당 퍼트",
-   "zero": 2.4,
-   "full": 2
+   "zero": 2.2,
+   "full": 1.75
   },
   "fp": {
    "label": "거리감",
@@ -33,63 +33,63 @@
   "crisis": {
    "label": "위기관리",
    "metric": "18홀당 벌타+더블+ 초과타",
-   "zero": 20,
-   "full": 6
+   "zero": 12,
+   "full": 2
   }
  },
  "radarTarget": 100,
  "targets": {
   "strokes": {
    "label": "평균 타수",
-   "v": 85,
+   "v": 79,
    "low": true,
    "fmt": "1"
   },
   "parlow": {
    "label": "파 이하 홀 수",
-   "v": 9,
+   "v": 10,
    "low": false,
    "fmt": "1"
   },
   "dbl": {
    "label": "더블보기+ 홀 수",
-   "v": 3,
+   "v": 1,
    "low": true,
    "fmt": "1"
   },
   "putts": {
    "label": "퍼트 수",
-   "v": 36,
+   "v": 31,
    "low": true,
    "fmt": "1"
   },
   "p3": {
    "label": "3퍼트 수",
-   "v": 3,
+   "v": 1,
    "low": true,
    "fmt": "1"
   },
   "girp": {
    "label": "GIR",
-   "v": 0.3,
+   "v": 0.5,
    "low": false,
    "fmt": "%"
   },
   "fwp": {
    "label": "FW 안착",
-   "v": 0.7,
+   "v": 0.55,
    "low": false,
    "fmt": "%"
   },
   "scrp": {
    "label": "스크램블",
-   "v": 0.3,
+   "v": 0.4,
    "low": false,
    "fmt": "%"
   },
   "pen": {
    "label": "벌타",
-   "v": 2,
+   "v": 1,
    "low": true,
    "fmt": "1"
   }
