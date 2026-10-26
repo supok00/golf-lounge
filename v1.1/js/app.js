@@ -271,7 +271,7 @@
       </table></div>
       <p class="legend-note">판정: 「이상」 지표는 값이 목표와 같거나 크면, 「이하」 지표는 목표와 같거나 작으면 달성입니다. 최근 5R과 직전 라운드를 각각 판정하고, 강점·약점은 최근 5R 판정을 씁니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 퍼트/GIR/FW/스크램블/벌타는 퍼트를 기록한 상세 라운드(${A.dets.length}회) 기준입니다.</p>
       <div class="grid g2" style="margin-top:12px">
-        <div class="card"><h3 class="mt0">6영역 육각형 <span class="muted">최근 상세 5R vs 전체</span></h3><div class="chart-box tall"><canvas id="cRadar"></canvas></div>
+        <div class="card"><h3 class="mt0">7영역 육각형 <span class="muted">최근 상세 5R vs 전체</span></h3><div class="chart-box tall"><canvas id="cRadar"></canvas></div>
           <p class="legend-note">초록: 퍼트를 기록한 최근 5라운드의 지표 <b>평균</b>을 점수로 바꾼 것 · 파랑: 상세 기록 전체 평균 · 주황 점선: 목표선(${settings.radarTarget}점). 각 점수는 설정의 0점·100점 기준으로 환산합니다.</p></div>
         <div class="card"><h3 class="mt0">라운드당 타수 손실 <span class="muted">최근 상세 5R</span></h3><div class="chart-box tall"><canvas id="cLoss"></canvas></div>
           <p class="legend-note">항목끼리 일부 겹칩니다(벌타 홀은 더블+가 되기 쉬움). 크기 비교로 연습 순서를 정하는 용도입니다.</p></div>
@@ -869,7 +869,7 @@
     const s = S.round(r);
     const R1 = S.analyze([r], settings).radar;   // 이 라운드 한 개의 지표 → 점수
     const rad = R1.score;
-    const rawFmt = (k, v) => (!isNum(v) ? "-" : ["fw", "gir", "scr"].includes(k) ? pct(v) : k === "pph" ? v.toFixed(2) + "개" : k === "fp" ? v.toFixed(1) + "m" : v.toFixed(1) + "타");
+    const rawFmt = (k, v) => (!isNum(v) ? "-" : ["fw", "gir", "scr"].includes(k) ? pct(v) : k === "pph" ? v.toFixed(2) + "개" : k === "p3" ? v.toFixed(1) + "개" : k === "fp" ? v.toFixed(1) + "m" : v.toFixed(1) + "타");
     app.innerHTML = `
       <div class="row" style="justify-content:space-between">
         <h2>${dot(r.date)} ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join(" / "))}${r.tee ? " · " + esc(r.tee) : ""}${r.region ? " · 📍" + esc(r.region) : ""}</span></h2>
@@ -885,7 +885,7 @@
       ${s.checks.length ? `<div class="notice" style="margin-top:10px">기록 확인: ${s.checks.join(", ")}번 홀은 온그린 타수 + 퍼트가 타수와 다릅니다.</div>` : ""}
       ${scorecard(r, false)}
       ${r.memo ? `<p class="card" style="margin-top:12px">${esc(r.memo)}</p>` : ""}
-      ${s.detail ? `<div class="card" style="margin-top:12px"><h3 class="mt0">이 라운드 6영역</h3>
+      ${s.detail ? `<div class="card" style="margin-top:12px"><h3 class="mt0">이 라운드 7영역</h3>
         <div class="grid g2">
           <div class="chart-box tall"><canvas id="cR"></canvas></div>
           <div class="tbl-wrap"><table><thead><tr><th class="l">영역</th><th>이 라운드</th><th>점수</th><th>100점 기준(목표)</th></tr></thead>

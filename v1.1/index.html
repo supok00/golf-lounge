@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>[v1.0] My Golf Lounge</title>
+<title>[v1.1] My Golf Lounge</title>
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div class="archive-bar">📦 이전 버전 v1.0 화면입니다 (보기 전용, 저장 안 됨) · <a href="../">최신 버전으로 가기</a></div>
+<div class="archive-bar">📦 이전 버전 v1.1 화면입니다 (보기 전용, 저장 안 됨) · <a href="../">최신 버전으로 가기</a></div>
 <header class="top">
   <div class="topbar">
     <a class="brand" href="#/dashboard" aria-label="홈으로">⛳ <b>My Golf Lounge</b> <span class="brand-sub">내 라운드 기록</span></a>
@@ -34,7 +34,7 @@
 <div id="toast" class="toast" hidden></div>
 <script>
 (() => {
-  const P = "archive.v1.0:", real = window.localStorage;
+  const P = "archive.v1.1:", real = window.localStorage;
   const box = {
     getItem: (k) => real.getItem(P + k), setItem: (k, v) => real.setItem(P + k, v), removeItem: (k) => real.removeItem(P + k),
     clear: () => { for (let i = real.length - 1; i >= 0; i--) { const k = real.key(i); if (k && k.startsWith(P)) real.removeItem(k); } },
