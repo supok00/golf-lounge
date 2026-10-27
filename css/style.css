@@ -303,3 +303,5 @@ table.hgrid th, table.hgrid td { padding: 4px 1px; }
 #subnav .subtabs a { padding: 7px 14px; border-radius: 999px; background: #eef2fb; color: #3a4660; font-weight: 700; font-size: 14px; text-decoration: none; }
 #subnav .subtabs a.active { background: #3654b8; color: #fff; }
 table.hgrid select { width: 2.35em; padding: 6px 0; font-size: 15px; text-align: center; text-align-last: center; -webkit-appearance: none; appearance: none; }   /* 동반자 오버 타수 고르기 — 9칸이 휴대폰 폭에 들어가게 화살표 없이 */
+table.hgrid input[list] { width: 2.35em; padding: 6px 0; font-size: 15px; text-align: center; }
+table.hgrid input[list]::-webkit-calendar-picker-indicator { display: none !important; }
