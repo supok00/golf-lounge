@@ -445,6 +445,10 @@
     const draft = ls.get(draftKey);
     const base = edit ? structuredClone(edit) : { date: new Date().toISOString().slice(0, 10), course: "", front: "", back: "", tee: "White", region: "", memo: "", holes: [] };
     let r = draft && draft.holes ? draft : base;
+    // 라운드 사진: 저장된 것은 경로, 새로 고른 것은 줄인 사진(dataUrl·b64). 새 사진은 따로 임시 저장(용량이 커서 실패하면 넘어감)
+    const photoKey = draftKey + ":photos";
+    const photoSt = { photos: (edit?.photos || []).map((path) => ({ path })), removed: [] };
+    (ls.get(photoKey) || []).forEach((u) => photoSt.photos.push({ dataUrl: u, b64: u.split(",")[1] }));
     const H = Object.fromEntries(Array.from({ length: 18 }, (_, i) => [i + 1, { h: i + 1 }]));
     (r.holes || []).forEach((h) => (H[h.h] = { ...h }));
     let cur = 1;
@@ -527,6 +531,13 @@
       <h3>스코어카드 미리보기</h3>
       <div id="preview"></div>
       <div class="totals" id="totals"></div>
+
+      <h3>라운드 사진 <span class="muted">추억 남기기 · 장수 제한 없음</span></h3>
+      <div class="card">
+        <div class="row"><label class="btn ghost filebtn">📷 사진 추가<input type="file" accept="image/*" multiple id="fPhotos" hidden></label><span class="muted" id="phInfo"></span></div>
+        <div id="phList"></div>
+        <p class="legend-note">여러 장을 한 번에 골라도 되고 여러 번 추가해도 됩니다. 긴 변 1600px로 줄이고 촬영 위치 등 사진 속 정보를 지워 <b>공개 저장소</b>에 올립니다(「GitHub에 저장」 때 함께). 사람 얼굴이 나온 사진은 공개돼도 괜찮은지 확인해 주세요.</p>
+      </div>
       <div class="row" style="margin-top:14px">
         <button class="btn" id="bSave" type="button" ${G.canWrite() ? "" : "disabled"}>GitHub에 저장</button>
         <a class="btn ghost" href="${edit ? "#/round/" + encodeURIComponent(edit.id) : "#/rounds"}">취소</a>
@@ -612,7 +623,30 @@
     });
     $("bPrev").onclick = () => { cur = cur === 1 ? 18 : cur - 1; drawAll(); };
     $("bNext").onclick = () => { cur = cur === 18 ? 1 : cur + 1; drawAll(); };
-    if ($("bDiscard")) $("bDiscard").onclick = () => { ls.del(draftKey); inputView(id); };
+    if ($("bDiscard")) $("bDiscard").onclick = () => { ls.del(draftKey); ls.del(photoKey); inputView(id); };
+    function drawPhotos() {
+      const n = photoSt.photos.length, fresh = photoSt.photos.filter((p) => p.dataUrl).length;
+      $("phInfo").textContent = n ? `${n}장${fresh ? ` (저장 전 ${fresh}장)` : ""}` : "";
+      $("phList").innerHTML = n ? `<div class="photos">${photoSt.photos.map((p, i) => `<div class="ph"><img src="${p.dataUrl || G.rawUrl(p.path)}" alt="사진 ${i + 1}" data-pv="${i}">${p.dataUrl ? `<span class="ph-new">저장 전</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : "";
+      $("phList").querySelectorAll("[data-pdel]").forEach((el) => (el.onclick = () => { const [p] = photoSt.photos.splice(Number(el.dataset.pdel), 1); if (p.path) photoSt.removed.push(p.path); savePhotoDraft(); drawPhotos(); }));
+      $("phList").querySelectorAll("[data-pv]").forEach((el) => (el.onclick = () => openViewer(photoSt.photos.map((p) => p.dataUrl || G.rawUrl(p.path)), Number(el.dataset.pv))));
+    }
+    function savePhotoDraft() {
+      const fresh = photoSt.photos.filter((p) => p.dataUrl).map((p) => p.dataUrl);
+      if (!fresh.length) return ls.del(photoKey);
+      try { localStorage.setItem(photoKey, JSON.stringify(fresh)); } catch { ls.del(photoKey); }   // 기기 저장 공간이 모자라면 사진은 임시 저장하지 않음
+    }
+    $("fPhotos").onchange = async (e) => {
+      const files = [...e.target.files];
+      e.target.value = "";
+      for (const [i, f] of files.entries()) {
+        $("phInfo").textContent = `사진 줄이는 중 ${i + 1}/${files.length}…`;
+        try { photoSt.photos.push(await Companions.shrink(f)); } catch (err) { toast(err.message, 4000); }
+      }
+      savePhotoDraft();
+      drawPhotos();
+    };
+    drawPhotos();
     $("bCourse").onclick = () => {
       const m = meta();
       const prev = S.byRecent(rounds.filter((x) => x.course === m.course && x.id !== edit?.id));
@@ -660,12 +694,19 @@
       $("bSave").disabled = true;
       $("bSave").textContent = "저장 중…";
       try {
+        const what = `${m.date} ${m.course}`;
+        const ph = await uploadPhotos(photoSt, obj.id, what, (k, n) => ($("bSave").textContent = `사진 올리는 중 ${k}/${n}…`));
+        obj.photos = ph.paths.length ? ph.paths : undefined;
+        $("bSave").textContent = "저장 중…";
         await commit((data) => {
           const i = data.findIndex((x) => x.id === obj.id);
           if (i >= 0) data[i] = obj; else data.push(obj);
           return data.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         }, `${edit ? "라운드 수정" : "라운드 추가"}: ${m.date} ${m.course}`);
+        for (const p of photoSt.removed) await G.deleteFile(p, `사진 삭제: ${what}`).catch(() => null);
+        if (ph.errs.length) toast("사진은 저장했지만 다른 저장소 동기화 실패: " + ph.errs.join(" / "), 6000);
         ls.del(draftKey);
+        ls.del(photoKey);
         toast("GitHub에 저장했습니다.");
         location.hash = "#/round/" + encodeURIComponent(obj.id);
       } catch (e) {
@@ -707,6 +748,38 @@
       <thead><tr><th class="l">${name}</th>${Array.from({ length: 9 }, (_, i) => { const p = hm[a + i]?.par; return `<th>${parMark(p)}${a + i}</th>`; }).join("")}<th>${a === 1 ? "OUT" : "IN"}</th></tr></thead>
       <tbody>${rowsUsed.map(([k, lab, how]) => `<tr><th class="l">${lab}</th>${Array.from({ length: 9 }, (_, i) => cell(a + i, k)).join("")}<td><b>${tot(a, k, how || (k === "gir" ? "gir" : ""))}</b></td></tr>`).join("")}</tbody></table></div>`;
     return half(1, "전반") + half(10, "후반");
+  }
+
+  // ───────────── 사진 크게 보기 ─────────────
+  function openViewer(urls, start = 0) {
+    let i = start;
+    const v = document.createElement("div");
+    v.className = "viewer";
+    v.innerHTML = `<button type="button" class="vw-x" aria-label="닫기">✕</button><span class="vw-n"></span>
+      <button type="button" class="vw-nav vw-prev" aria-label="이전 사진">‹</button><img alt=""><button type="button" class="vw-nav vw-next" aria-label="다음 사진">›</button>
+      <a class="vw-orig" target="_blank" rel="noopener">원본 열기</a>`;
+    const img = v.querySelector("img");
+    const show = () => {
+      img.src = urls[i];
+      img.alt = `사진 ${i + 1}`;
+      v.querySelector(".vw-n").textContent = `${i + 1} / ${urls.length}`;
+      v.querySelector(".vw-orig").href = urls[i];
+      v.querySelectorAll(".vw-nav").forEach((b) => (b.hidden = urls.length < 2));
+    };
+    const go = (d) => { i = (i + d + urls.length) % urls.length; show(); };
+    const close = () => { v.remove(); document.removeEventListener("keydown", key); document.body.style.overflow = ""; };
+    const key = (e) => { if (e.key === "Escape") close(); else if (e.key === "ArrowLeft") go(-1); else if (e.key === "ArrowRight") go(1); };
+    v.querySelector(".vw-x").onclick = close;
+    v.querySelector(".vw-prev").onclick = () => go(-1);
+    v.querySelector(".vw-next").onclick = () => go(1);
+    v.onclick = (e) => { if (e.target === v) close(); };
+    let x0 = null;
+    v.addEventListener("touchstart", (e) => (x0 = e.touches[0].clientX), { passive: true });
+    v.addEventListener("touchend", (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; });
+    document.addEventListener("keydown", key);
+    document.body.style.overflow = "hidden";
+    document.body.appendChild(v);
+    show();
   }
 
   // ───────────── 동반자·사진 ─────────────
@@ -910,10 +983,12 @@
   }
 
   // 새 사진을 올리고 경로 목록을 돌려준다(라운드 기록에는 경로만 저장)
-  async function uploadPhotos(st, id, what) {
-    const errs = [];
+  async function uploadPhotos(st, id, what, onProgress) {
+    const errs = [], total = st.photos.filter((p) => !p.path).length;
+    let k = 0;
     for (const [i, p] of st.photos.entries()) {
       if (p.path) continue;
+      if (onProgress) onProgress(++k, total);
       const path = `${G.DATA_DIR}/photos/${id}-${Date.now().toString(36)}${i}.jpg`;
       errs.push(...(await G.putFile(path, p.b64, `사진 추가: ${what}`)));
       p.path = path;
@@ -960,7 +1035,7 @@
         <thead><tr><th>날짜</th><th class="l">골프장</th><th>홀</th><th>총타수</th><th>오버</th><th>전반</th><th>후반</th><th>퍼트</th><th>GIR</th><th>FW</th><th>드라이버</th><th>더블+</th><th>벌타</th></tr></thead>
         <tbody>${list.map((r) => {
           const s = S.round(r);
-          return `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}</td><td class="l">${esc(r.course)}</td><td>${s.holes}</td><td><b>${s.strokes ?? "-"}</b></td><td>${sgn(s.over, 0)}</td><td>${s.front ?? "-"}</td><td>${s.back ?? "-"}</td><td>${s.detail ? s.putts : "-"}</td><td>${s.detail ? pct(s.girp) : "-"}</td><td>${pct(s.fwp)}</td><td>${isNum(s.drive) ? Math.round(s.drive) + "m" : "-"}</td><td>${s.dbl}</td><td>${s.detail && isNum(s.pen) ? s.pen : "-"}</td></tr>`;
+          return `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}</td><td class="l">${esc(r.course)}${(r.photos || []).length ? ` <span class="muted" title="사진 ${r.photos.length}장">📷${r.photos.length}</span>` : ""}</td><td>${s.holes}</td><td><b>${s.strokes ?? "-"}</b></td><td>${sgn(s.over, 0)}</td><td>${s.front ?? "-"}</td><td>${s.back ?? "-"}</td><td>${s.detail ? s.putts : "-"}</td><td>${s.detail ? pct(s.girp) : "-"}</td><td>${pct(s.fwp)}</td><td>${isNum(s.drive) ? Math.round(s.drive) + "m" : "-"}</td><td>${s.dbl}</td><td>${s.detail && isNum(s.pen) ? s.pen : "-"}</td></tr>`;
         }).join("")}</tbody>
       </table></div>`;
     app.querySelectorAll("tr[data-id]").forEach((tr) => tr.addEventListener("click", () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
@@ -987,6 +1062,9 @@
       ${s.checks.length ? `<div class="notice" style="margin-top:10px">기록 확인: ${s.checks.join(", ")}번 홀은 온그린 타수 + 퍼트가 타수와 다릅니다.</div>` : ""}
       ${scorecard(r, false)}
       ${r.memo ? `<p class="card" style="margin-top:12px">${esc(r.memo)}</p>` : ""}
+      <h3>라운드 사진 <span class="muted">${(r.photos || []).length ? r.photos.length + "장 · 누르면 크게" : "없음"}</span></h3>
+      ${(r.photos || []).length ? `<div class="photos view">${r.photos.map((p, i) => `<button type="button" class="ph" data-pv="${i}" aria-label="사진 ${i + 1} 크게 보기"><img src="${G.rawUrl(p)}" alt="라운드 사진 ${i + 1}" loading="lazy"></button>`).join("")}</div>`
+        : `<p class="muted">아래 「동반자·사진 추가」나 「수정」에서 사진을 붙일 수 있습니다.</p>`}
       ${s.detail ? `<div class="card" style="margin-top:12px"><h3 class="mt0">이 라운드 7영역</h3>
         <div class="grid g2">
           <div class="chart-box tall"><canvas id="cR"></canvas></div>
@@ -996,7 +1074,6 @@
         <p class="legend-note">이 라운드 <b>한 경기만</b>의 지표를 점수로 바꾼 것입니다(홈의 육각형은 최근 5라운드 평균이라 한 경기보다 덜 들쭉날쭉합니다). 주황 점선은 목표선 ${settings.radarTarget}점, 표의 「100점 기준」이 그 목표에 해당하는 실제 값입니다.</p></div>` : ""}
       <h3>동반자 비교 <span class="muted">${(r.companions || []).length ? (r.companions || []).length + "명" : "없음"}</span></h3>
       ${companionCompare(r) || `<p class="muted">함께 친 동반자의 점수를 넣으면 순위·홀별로 비교합니다.</p>`}
-      ${(r.photos || []).length ? `<div class="photos view">${r.photos.map((p, i) => `<a class="ph" href="${G.rawUrl(p)}" target="_blank" rel="noopener"><img src="${G.rawUrl(p)}" alt="라운드 사진 ${i + 1}" loading="lazy"></a>`).join("")}</div>` : ""}
       <div class="row" style="margin-top:10px"><button class="btn ghost" id="bComp" type="button">👥 동반자·사진 ${(r.companions || []).length || (r.photos || []).length ? "편집" : "추가"}</button></div>
       <div id="compBox"></div>
       <div id="delBox"></div>
@@ -1024,6 +1101,7 @@
         }],
       });
     }
+    app.querySelectorAll(".photos.view [data-pv]").forEach((b) => (b.onclick = () => openViewer(r.photos.map(G.rawUrl), Number(b.dataset.pv))));
     document.getElementById("bComp").onclick = () => {
       const box = document.getElementById("compBox");
       const st = newEditState(r);
