@@ -538,11 +538,11 @@
       <div id="preview"></div>
       <div class="totals" id="totals"></div>
 
-      <h3>라운드 사진 <span class="muted">추억 남기기 · 장수 제한 없음</span></h3>
+      <h3>라운드 사진·동영상 <span class="muted">추억 남기기 · 개수 제한 없음</span></h3>
       <div class="card">
-        <div class="row"><label class="btn ghost filebtn">📷 사진 추가<input type="file" accept="image/*" multiple id="fPhotos" hidden></label><span class="muted" id="phInfo"></span></div>
+        <div class="row"><label class="btn ghost filebtn">📷 사진·동영상 추가<input type="file" accept="image/*,video/*" multiple id="fPhotos" hidden></label><span class="muted" id="phInfo"></span></div>
         <div id="phList"></div>
-        <p class="legend-note">여러 장을 한 번에 골라도 되고 여러 번 추가해도 됩니다. 긴 변 1600px로 줄이고 촬영 위치 등 사진 속 정보를 지워 <b>공개 저장소</b>에 올립니다(「GitHub에 저장」 때 함께). 사람 얼굴이 나온 사진은 공개돼도 괜찮은지 확인해 주세요.</p>
+        <p class="legend-note">여러 개를 한 번에 골라도 되고 여러 번 추가해도 됩니다. 「GitHub에 저장」 때 <b>공개 저장소</b>에 함께 올라갑니다. 사진은 긴 변 1600px로 줄이고 촬영 위치 등 사진 속 정보를 지웁니다. <b>동영상은 줄이지 않고 그대로 올리므로 한 개 50MB까지</b>입니다(휴대폰 영상 약 20~30초) — 스윙·퍼트 장면만 잘라서 올리세요. 동영상은 이 기기 임시 저장에 들어가지 않으니 저장 직전에 고르는 것을 권장합니다. 사람 얼굴이 나온 사진·영상은 공개돼도 괜찮은지 확인해 주세요.</p>
       </div>
       <div class="row" style="margin-top:14px">
         <button class="btn" id="bSave" type="button" ${G.canWrite() ? "" : "disabled"}>GitHub에 저장</button>
@@ -632,13 +632,13 @@
     if ($("bDiscard")) $("bDiscard").onclick = () => { ls.del(draftKey); ls.del(photoKey); inputView(id); };
     function drawPhotos() {
       const n = photoSt.photos.length, fresh = photoSt.photos.filter((p) => p.dataUrl).length;
-      $("phInfo").textContent = n ? `${n}장${fresh ? ` (저장 전 ${fresh}장)` : ""}` : "";
-      $("phList").innerHTML = n ? `<div class="photos">${photoSt.photos.map((p, i) => `<div class="ph"><img src="${p.dataUrl || G.rawUrl(p.path)}" alt="사진 ${i + 1}" data-pv="${i}">${p.dataUrl ? `<span class="ph-new">저장 전</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : "";
-      $("phList").querySelectorAll("[data-pdel]").forEach((el) => (el.onclick = () => { const [p] = photoSt.photos.splice(Number(el.dataset.pdel), 1); if (p.path) photoSt.removed.push(p.path); savePhotoDraft(); drawPhotos(); }));
-      $("phList").querySelectorAll("[data-pv]").forEach((el) => (el.onclick = () => openViewer(photoSt.photos.map((p) => p.dataUrl || G.rawUrl(p.path)), Number(el.dataset.pv))));
+      $("phInfo").textContent = n ? `${mediaCount(photoSt.photos)}${fresh ? ` (저장 전 ${fresh}개)` : ""}` : "";
+      $("phList").innerHTML = n ? `<div class="photos">${photoSt.photos.map((p, i) => `<div class="ph" data-pv="${i}">${thumb(p, i)}${p.dataUrl ? `<span class="ph-new">저장 전${p.size ? ` · ${(p.size / 1048576).toFixed(1)}MB` : ""}</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="빼기">✕</button></div>`).join("")}</div>` : "";
+      $("phList").querySelectorAll("[data-pdel]").forEach((el) => (el.onclick = (e) => { e.stopPropagation(); const [p] = photoSt.photos.splice(Number(el.dataset.pdel), 1); if (p.path) photoSt.removed.push(p.path); savePhotoDraft(); drawPhotos(); }));
+      $("phList").querySelectorAll("[data-pv]").forEach((el) => (el.onclick = () => openViewer(photoSt.photos.map(mediaItem), Number(el.dataset.pv))));
     }
     function savePhotoDraft() {
-      const fresh = photoSt.photos.filter((p) => p.dataUrl).map((p) => p.dataUrl);
+      const fresh = photoSt.photos.filter((p) => p.dataUrl && !p.video).map((p) => p.dataUrl);   // 동영상은 너무 커서 임시 저장하지 않음
       if (!fresh.length) return ls.del(photoKey);
       try { localStorage.setItem(photoKey, JSON.stringify(fresh)); } catch { ls.del(photoKey); }   // 기기 저장 공간이 모자라면 사진은 임시 저장하지 않음
     }
@@ -646,8 +646,8 @@
       const files = [...e.target.files];
       e.target.value = "";
       for (const [i, f] of files.entries()) {
-        $("phInfo").textContent = `사진 줄이는 중 ${i + 1}/${files.length}…`;
-        try { photoSt.photos.push(await Companions.shrink(f)); } catch (err) { toast(err.message, 4000); }
+        $("phInfo").textContent = `읽는 중 ${i + 1}/${files.length}…`;
+        try { photoSt.photos.push(await readMedia(f)); } catch (err) { toast(err.message, 6000); }
       }
       savePhotoDraft();
       drawPhotos();
@@ -701,7 +701,7 @@
       $("bSave").textContent = "저장 중…";
       try {
         const what = `${m.date} ${m.course}`;
-        const ph = await uploadPhotos(photoSt, obj.id, what, (k, n) => ($("bSave").textContent = `사진 올리는 중 ${k}/${n}…`));
+        const ph = await uploadPhotos(photoSt, obj.id, what, (k, n, vid) => ($("bSave").textContent = `${vid ? "동영상" : "사진"} 올리는 중 ${k}/${n}…`));
         obj.photos = ph.paths.length ? ph.paths : undefined;
         $("bSave").textContent = "저장 중…";
         await commit((data) => {
@@ -756,29 +756,56 @@
     return half(1, "전반") + half(10, "후반");
   }
 
-  // ───────────── 사진 크게 보기 ─────────────
+  // ───────────── 라운드 사진·동영상 ─────────────
+  // 동영상도 사진과 같은 목록(r.photos)에 경로로 저장하고 확장자로 구분한다. 사진처럼 줄일 수 없어 한 개 크기를 제한한다
+  // (GitHub API는 파일당 100MB까지, 50MB가 넘으면 경고 — 저장소가 커지면 사이트도 느려진다)
+  const VIDEO_MAX = 50 * 1024 * 1024;
+  const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i;
+  const isVideo = (p) => (typeof p === "string" ? VIDEO_EXT.test(p) : !!p.video || VIDEO_EXT.test(p.path || ""));
+  // 저장한 동영상은 배포본(올바른 동영상 형식으로 내려 줌)을 먼저, 아직 배포 전이면 저장소 원본으로
+  const videoSrcs = (path) => [path, G.rawUrl(path)];
+  // 보기 창에 넘길 항목: 사진은 주소 문자열, 동영상은 {video, srcs}
+  const mediaItem = (p) => (isVideo(p) ? { video: true, srcs: p.path || typeof p === "string" ? videoSrcs(p.path || p) : [p.dataUrl] } : p.dataUrl || G.rawUrl(p.path || p));
+  async function readVideo(file) {
+    if (file.size > VIDEO_MAX) throw new Error(`동영상이 ${Math.round(file.size / 1048576)}MB라 올릴 수 없습니다(한 개 50MB까지). 휴대폰 갤러리에서 앞뒤를 잘라 짧게 만들어 주세요.`);
+    const b64 = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1]); fr.onerror = () => no(new Error("동영상을 읽지 못했습니다.")); fr.readAsDataURL(file); });
+    const ext = (file.name.match(/\.(\w+)$/) || [])[1]?.toLowerCase() || (file.type.includes("quicktime") ? "mov" : "mp4");
+    return { video: true, ext, dataUrl: URL.createObjectURL(file), b64, size: file.size };
+  }
+  // 사진·동영상 파일 하나를 편집 목록에 넣을 항목으로(사진은 줄이고, 동영상은 크기만 확인)
+  const readMedia = (f) => (f.type.startsWith("video/") || VIDEO_EXT.test(f.name) ? readVideo(f) : Companions.shrink(f));
+  // 작은 칸 미리보기: 동영상은 첫 장면 + ▶ 표시
+  function thumb(p, i, attr = "") {
+    if (!isVideo(p)) return `<img src="${p.dataUrl || G.rawUrl(p.path || p)}" alt="사진 ${i + 1}" loading="lazy" ${attr}>`;
+    const srcs = p.dataUrl ? [p.dataUrl] : videoSrcs(p.path || p);
+    return `<video preload="metadata" muted playsinline ${attr}>${srcs.map((u) => `<source src="${u}${u.startsWith("blob:") ? "" : "#t=0.1"}">`).join("")}</video><span class="ph-play" aria-hidden="true">▶</span>`;
+  }
+  const mediaCount = (list) => { const v = list.filter(isVideo).length, ph = list.length - v; return [ph ? `사진 ${ph}` : "", v ? `동영상 ${v}` : ""].filter(Boolean).join(" · "); };
+
+  // ───────────── 사진·동영상 크게 보기 ─────────────
   function openViewer(urls, start = 0) {
     let i = start;
     const v = document.createElement("div");
     v.className = "viewer";
     v.innerHTML = `<button type="button" class="vw-x" aria-label="닫기">✕</button><span class="vw-n"></span>
-      <button type="button" class="vw-nav vw-prev" aria-label="이전 사진">‹</button><img alt=""><button type="button" class="vw-nav vw-next" aria-label="다음 사진">›</button>
+      <button type="button" class="vw-nav vw-prev" aria-label="이전">‹</button><div class="vw-media"></div><button type="button" class="vw-nav vw-next" aria-label="다음">›</button>
       <a class="vw-orig" target="_blank" rel="noopener">원본 열기</a>`;
-    const img = v.querySelector("img");
+    const box = v.querySelector(".vw-media");
     const show = () => {
-      img.src = urls[i];
-      img.alt = `사진 ${i + 1}`;
+      const it = urls[i];
+      box.innerHTML = typeof it === "string" ? `<img src="${it}" alt="사진 ${i + 1}">`
+        : `<video controls autoplay playsinline>${it.srcs.map((u) => `<source src="${u}">`).join("")}이 브라우저에서 재생할 수 없는 동영상입니다.</video>`;
       v.querySelector(".vw-n").textContent = `${i + 1} / ${urls.length}`;
-      v.querySelector(".vw-orig").href = urls[i];
+      v.querySelector(".vw-orig").href = typeof it === "string" ? it : it.srcs.at(-1);
       v.querySelectorAll(".vw-nav").forEach((b) => (b.hidden = urls.length < 2));
     };
     const go = (d) => { i = (i + d + urls.length) % urls.length; show(); };
-    const close = () => { v.remove(); document.removeEventListener("keydown", key); document.body.style.overflow = ""; };
+    const close = () => { box.innerHTML = ""; v.remove(); document.removeEventListener("keydown", key); document.body.style.overflow = ""; };
     const key = (e) => { if (e.key === "Escape") close(); else if (e.key === "ArrowLeft") go(-1); else if (e.key === "ArrowRight") go(1); };
     v.querySelector(".vw-x").onclick = close;
     v.querySelector(".vw-prev").onclick = () => go(-1);
     v.querySelector(".vw-next").onclick = () => go(1);
-    v.onclick = (e) => { if (e.target === v) close(); };
+    v.onclick = (e) => { if (e.target === v || e.target === box) close(); };
     let x0 = null;
     v.addEventListener("touchstart", (e) => (x0 = e.touches[0].clientX), { passive: true });
     v.addEventListener("touchend", (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; });
@@ -935,7 +962,7 @@
           <label class="chk"><input type="checkbox" data-act="keep" ${st.keep === false ? "" : "checked"}> 라운드에 사진 저장</label></div>
         <p class="legend-note">점수 읽기는 사진 속 글자를 <b>이 기기에서</b> 읽어 동반자 「이름·점수」를 바로 넣습니다(처음 한 번 인식 데이터를 받느라 시간이 걸림). 손글씨·흐린 사진은 틀리기 쉬우니 숫자를 확인하고, 이상하면 읽은 글이 들어간 붙여넣기 칸을 고쳐 「읽어서 추가」를 누르세요. 저장한 사진은 공개 저장소에 올라가며, 촬영 위치 등 사진 속 정보는 지우고 올립니다.</p>
         <div class="ocr-msg" data-act="msg"></div>
-        ${st.photos.length ? `<div class="photos">${st.photos.map((p, i) => `<div class="ph"><img src="${p.dataUrl || G.rawUrl(p.path)}" alt="사진 ${i + 1}">${p.dataUrl ? `<span class="ph-new">저장 전</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}`;
+        ${st.photos.length ? `<div class="photos">${st.photos.map((p, i) => `<div class="ph">${thumb(p, i)}${p.dataUrl ? `<span class="ph-new">저장 전</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}`;
       const q = (s) => box.querySelector(s);
       box.querySelectorAll("[data-cn]").forEach((el) => (el.onchange = () => {
         const c = st.comps[el.dataset.cn], v = el.value.trim();
@@ -994,9 +1021,9 @@
     let k = 0;
     for (const [i, p] of st.photos.entries()) {
       if (p.path) continue;
-      if (onProgress) onProgress(++k, total);
-      const path = `${G.DATA_DIR}/photos/${id}-${Date.now().toString(36)}${i}.jpg`;
-      errs.push(...(await G.putFile(path, p.b64, `사진 추가: ${what}`)));
+      if (onProgress) onProgress(++k, total, p.video);
+      const path = `${G.DATA_DIR}/photos/${id}-${Date.now().toString(36)}${i}.${p.video ? p.ext : "jpg"}`;
+      errs.push(...(await G.putFile(path, p.b64, `${p.video ? "동영상" : "사진"} 추가: ${what}`)));
       p.path = path;
       delete p.b64;
     }
@@ -1041,7 +1068,7 @@
         <thead><tr><th>날짜</th><th class="l">골프장</th><th>홀</th><th>총타수</th><th>오버</th><th>전반</th><th>후반</th><th>퍼트</th><th>GIR</th><th>FW</th><th>드라이버</th><th>더블+</th><th>벌타</th></tr></thead>
         <tbody>${list.map((r) => {
           const s = S.round(r);
-          return `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}</td><td class="l">${esc(r.course)}${(r.photos || []).length ? ` <span class="muted" title="사진 ${r.photos.length}장">📷${r.photos.length}</span>` : ""}</td><td>${s.holes}</td><td><b>${s.strokes ?? "-"}</b></td><td>${sgn(s.over, 0)}</td><td>${s.front ?? "-"}</td><td>${s.back ?? "-"}</td><td>${s.detail ? s.putts : "-"}</td><td>${s.detail ? pct(s.girp) : "-"}</td><td>${pct(s.fwp)}</td><td>${isNum(s.drive) ? Math.round(s.drive) + "m" : "-"}</td><td>${s.dbl}</td><td>${s.detail && isNum(s.pen) ? s.pen : "-"}</td></tr>`;
+          return `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}</td><td class="l">${esc(r.course)}${(r.photos || []).length ? ` <span class="muted" title="${mediaCount(r.photos)}">${(() => { const v = r.photos.filter(isVideo).length, ph = r.photos.length - v; return (ph ? "📷" + ph : "") + (v ? " 🎬" + v : ""); })()}</span>` : ""}</td><td>${s.holes}</td><td><b>${s.strokes ?? "-"}</b></td><td>${sgn(s.over, 0)}</td><td>${s.front ?? "-"}</td><td>${s.back ?? "-"}</td><td>${s.detail ? s.putts : "-"}</td><td>${s.detail ? pct(s.girp) : "-"}</td><td>${pct(s.fwp)}</td><td>${isNum(s.drive) ? Math.round(s.drive) + "m" : "-"}</td><td>${s.dbl}</td><td>${s.detail && isNum(s.pen) ? s.pen : "-"}</td></tr>`;
         }).join("")}</tbody>
       </table></div>`;
     app.querySelectorAll("tr[data-id]").forEach((tr) => tr.addEventListener("click", () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
@@ -1068,9 +1095,9 @@
       ${s.checks.length ? `<div class="notice" style="margin-top:10px">기록 확인: ${s.checks.join(", ")}번 홀은 온그린 타수 + 퍼트가 타수와 다릅니다.</div>` : ""}
       ${scorecard(r, false)}
       ${r.memo ? `<p class="card" style="margin-top:12px">${esc(r.memo)}</p>` : ""}
-      <h3>라운드 사진 <span class="muted">${(r.photos || []).length ? r.photos.length + "장 · 누르면 크게" : "없음"}</span></h3>
-      ${(r.photos || []).length ? `<div class="photos view">${r.photos.map((p, i) => `<button type="button" class="ph" data-pv="${i}" aria-label="사진 ${i + 1} 크게 보기"><img src="${G.rawUrl(p)}" alt="라운드 사진 ${i + 1}" loading="lazy"></button>`).join("")}</div>`
-        : `<p class="muted">아래 「동반자·사진 추가」나 「수정」에서 사진을 붙일 수 있습니다.</p>`}
+      <h3>라운드 사진·동영상 <span class="muted">${(r.photos || []).length ? mediaCount(r.photos) + " · 누르면 크게" : "없음"}</span></h3>
+      ${(r.photos || []).length ? `<div class="photos view">${r.photos.map((p, i) => `<button type="button" class="ph" data-pv="${i}" aria-label="${isVideo(p) ? "동영상" : "사진"} ${i + 1} 크게 보기">${thumb(p, i)}</button>`).join("")}</div>`
+        : `<p class="muted">「수정」에서 사진·동영상을 붙일 수 있습니다.</p>`}
       ${s.detail ? `<div class="card" style="margin-top:12px"><h3 class="mt0">이 라운드 7영역</h3>
         <div class="grid g2">
           <div class="chart-box tall"><canvas id="cR"></canvas></div>
@@ -1107,7 +1134,7 @@
         }],
       });
     }
-    app.querySelectorAll(".photos.view [data-pv]").forEach((b) => (b.onclick = () => openViewer(r.photos.map(G.rawUrl), Number(b.dataset.pv))));
+    app.querySelectorAll(".photos.view [data-pv]").forEach((b) => (b.onclick = () => openViewer(r.photos.map(mediaItem), Number(b.dataset.pv))));
     document.getElementById("bComp").onclick = () => {
       const box = document.getElementById("compBox");
       const st = newEditState(r);

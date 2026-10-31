@@ -152,7 +152,7 @@ const GitHubStore = (() => {
         const cur = await fetch(`${apiUrl(r, path)}?ref=${encodeURIComponent(r.branch)}`, { headers: headers(), cache: "no-store" });
         const sha = cur.ok ? (await cur.json()).sha : undefined;
         const res = await fetch(apiUrl(r, path), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ message, content: b64, sha, branch: r.branch }) });
-        if (!res.ok) throw new Error(`${label(r)} 사진 저장 실패 (${res.status})`);
+        if (!res.ok) throw new Error(`${label(r)} 사진·동영상 저장 실패 (${res.status}${res.status === 413 || res.status === 422 ? " — 파일이 너무 큼" : ""})`);
       } catch (e) {
         if (i === 0) throw e;   // 기본 저장소 실패는 저장 실패
         errors.push(e.message);
