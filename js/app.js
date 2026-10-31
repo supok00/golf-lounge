@@ -146,31 +146,33 @@
 
   // ───────────── 공통 필터 (모든 분석 화면에 같은 조건) ─────────────
   let F = { period: "all", course: "", full: false, ...(ls.get(KEY_FILTER) || {}) };
+  if (F.period === "lastMonth") F.period = "all";   // 「지난 달」은 2026.10.31에 없앴다(기기에 남은 예전 조건)
   const iso = (d) => d.toISOString().slice(0, 10);
   function inPeriod(date) {
     const t = new Date(), p = F.period;
     if (p === "all") return true;
     if (p === "d90") return date >= iso(new Date(t - 90 * 864e5));
     if (p === "month") return date.startsWith(iso(t).slice(0, 7));
-    if (p === "lastMonth") { const m = new Date(t.getFullYear(), t.getMonth() - 1, 15); return date.startsWith(iso(m).slice(0, 7)); }
     if (p.startsWith("y")) return date.startsWith(p.slice(1));
     return true;
   }
   function frounds() {
-    return rounds.filter((r) => inPeriod(r.date || "") && (!F.course || String(r.course).includes(F.course)) && (!F.full || S.round(r).full));
+    const list = rounds.filter((r) => inPeriod(r.date || "") && (!F.course || String(r.course).includes(F.course)) && (!F.full || S.round(r).full));
+    // 「최근 라운드」: 골프장·18홀 조건에 맞는 라운드 중 가장 최근 1개만
+    return F.period === "recent" ? S.byRecent(list).slice(0, 1) : list;
   }
-  const PERIOD_LABEL = { all: "전체", d90: "최근 90일", month: "이번 달", lastMonth: "지난 달" };
+  const PERIOD_LABEL = { all: "전체", recent: "최근 라운드", d90: "최근 90일", month: "이번 달" };
   function filterBar() {
     const years = [...new Set(rounds.map((r) => String(r.date).slice(0, 4)))].sort().reverse();
     const opts = [...Object.entries(PERIOD_LABEL), ...years.map((y) => ["y" + y, y + "년"])];
-    const n = frounds().length;
+    const fr = frounds(), n = fr.length;
     return `<div class="fbar" id="fbar">
       <div class="chips">${opts.map(([v, l]) => `<button type="button" class="chip ${F.period === v ? "on" : ""}" data-p="${v}">${l}</button>`).join("")}</div>
       <div class="row">
         <input id="fCourseQ" placeholder="골프장 검색" value="${esc(F.course)}" list="fCourseList">
         <datalist id="fCourseList">${[...new Set(rounds.map((r) => r.course))].sort().map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
         <label class="row" style="gap:4px;font-size:14px"><input type="checkbox" id="fFull" ${F.full ? "checked" : ""}> 18홀만</label>
-        <span class="muted">${n}라운드${F.period !== "all" || F.course || F.full ? ` · <button class="link" id="fReset" type="button">조건 초기화</button>` : ""}</span>
+        <span class="muted">${F.period === "recent" && fr[0] ? `<b>${dot(fr[0].date)} ${esc(fr[0].course)}</b>` : n + "라운드"}${F.period !== "all" || F.course || F.full ? ` · <button class="link" id="fReset" type="button">조건 초기화</button>` : ""}</span>
       </div></div>`;
   }
   function bindFilter() {
@@ -191,7 +193,8 @@
     stats: ["스코어 유형 카드를 누르면 그 스코어가 나온 라운드가 아래에 나옵니다.", "추이 그래프는 기간이 1년 이하면 월별, 3년 이하면 분기별, 그 이상은 연도별로 묶습니다. 연도를 고르면 그해를 월별로 봅니다.", "골프장 이름을 누르면 그 골프장 라운드만 걸러 봅니다."],
     insights: ["라운드 날짜·시간으로 만든 요약입니다. 오전/오후는 티오프 시간이 있는 라운드(스마트스코어 붙여넣기 등)만 집계합니다."],
     holes: ["Par가 기록된 홀만 집계합니다."],
-    detail: ["v2 「상세분석」 7개 블록에 ⑧ 홀 길이별(실제로 친 티 거리) 분석을 더했습니다. 상세 항목을 기록한 홀만 각 표에 들어갑니다."],
+    detail: ["v2 「상세분석」 7개 블록에 ⑧ 홀 길이별(실제로 친 티 거리) 분석을 더했습니다. 상세 항목을 기록한 홀만 각 표에 들어갑니다.", "⑪ 홀 메모는 라운드 입력의 홀별 「메모」를 샷 종류(티샷·세컨·어프로치·벙커·퍼트)와 잘함/미스로 나눠 모읍니다."],
+    putts: ["퍼트 수와 「1st 퍼트 거리」를 기록한 홀로 짧은 퍼트 마무리와 긴 퍼트 거리감을 나눠 봅니다.", "위 기간 필터의 「최근 라운드」를 고르면 이번 라운드만 볼 수 있습니다."],
   };
   const desc = (k) => (DESC[k] ? `<ul class="desc">${DESC[k].map((x) => `<li>${x}</li>`).join("")}</ul>` : "");
   const head = (k) => filterBar() + desc(k);
@@ -233,7 +236,7 @@
 
   // 메뉴를 줄이려고 비슷한 화면을 한 메뉴의 하위 탭으로 묶었다
   const SUB = {
-    analysis: [["score", "스코어", () => statsView()], ["holes", "홀·파", () => holesView()], ["shots", "샷 분석", () => detailView()]],
+    analysis: [["score", "스코어", () => statsView()], ["holes", "홀·파", () => holesView()], ["shots", "샷 분석", () => detailView()], ["putts", "퍼트", () => puttsView()]],
     register: [["input", "직접 입력", () => inputView(null)], ["paste", "붙여넣기·사진", () => importView()]],
   };
   function route() {
@@ -322,6 +325,7 @@
     const H = S.holeLevel(fr);
     const ps = [3, 4, 5].filter((p) => isNum(H.byPar[p].over)).sort((a, b) => H.byPar[a].over - H.byPar[b].over);
     const frA = S.avg(A.fulls.map((r) => r.front)), bk = S.avg(A.fulls.map((r) => r.back));
+    const lastD = (A.fulls[0] || A.dets[0] || {}).date;
     app.innerHTML = `
       ${welcomeBox()}
       <div class="notice" style="margin-bottom:10px">🆕 겹치던 통계·분석·설정을 정리했습니다. <a href="#/review">무엇을 정리했나 보기 (${REVIEW.length}가지)</a></div>
@@ -336,18 +340,19 @@
       </div>
       <h2>실력 진단 <span class="muted">최근 5라운드 · 목표 판정과 영역 점수를 한 표로</span></h2>
       <div class="tbl-wrap"><table>
-        <thead><tr><th class="l">지표</th><th>목표</th><th>최근 5R</th><th>판정</th><th>점수</th><th>전체 평균</th></tr></thead>
+        <thead><tr><th class="l">지표</th><th>목표</th><th>최근 5R</th><th>최근 라운드${lastD ? `<br><span class="muted">${dot(lastD).slice(5)}</span>` : ""}</th><th>판정</th><th>점수</th><th>전체 평균</th></tr></thead>
         <tbody>${UNI.map((u) => {
           const t = u.t && settings.targets[u.t], m = u.t ? A.metric(u.t) : null;
           const r5 = m ? m.r5 : A.radar.raw[u.r], all = m ? m.all : A.radarAll.raw[u.r];
+          const last = m ? m.last : A.radarLast.raw[u.r], okL = t ? meets(last, t) : null;
           const ok = t ? meets(r5, t) : null, sc = u.r ? A.radar.score[u.r] : null;
           const fmt = (v) => (t ? fmtT(v, t.fmt) : uniFmt(u.r, v));
           return `<tr><td class="l"><b>${u.label}</b>${u.r ? ` <span class="pill">${settings.radar[u.r].label}</span>` : ""}<br><span class="muted">${u.low ? "▼ 낮을수록 좋음" : "▲ 높을수록 좋음"}</span></td>
-            <td>${t ? `<b>${goalText(t)}</b>` : `<span class="muted">-</span>`}</td>${t ? valCell(r5, t, ok, true) : `<td><b>${fmt(r5)}</b></td>`}<td>${judge(ok)}</td>
+            <td>${t ? `<b>${goalText(t)}</b>` : `<span class="muted">-</span>`}</td>${t ? valCell(r5, t, ok, true) : `<td><b>${fmt(r5)}</b></td>`}${t ? valCell(last, t, okL) : `<td>${fmt(last)}</td>`}<td>${judge(ok)}</td>
             <td class="${isNum(sc) ? (sc >= settings.radarTarget ? "ok" : "ng") : ""}">${isNum(sc) ? `<b>${sc}</b>` : "-"}</td><td class="muted">${fmt(all)}</td></tr>`;
         }).join("")}</tbody>
       </table></div>
-      <p class="legend-note">판정은 목표값 기준(최근 5R), 점수는 설정의 0점·100점 기준으로 바꾼 값입니다(오른쪽 육각형). 예전에는 두 표(실력 진단·육각형 기준)에 같은 지표가 따로 있었는데 하나로 합쳤습니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 나머지는 퍼트를 기록한 라운드(${A.dets.length}회) 기준.</p>
+      <p class="legend-note">판정은 목표값 기준(최근 5R), 「최근 라운드」는 가장 최근 1라운드 값(목표 달성은 초록·미달은 빨강)으로 5R 평균과 비교해 이번 라운드가 나아졌는지 봅니다${lastD && A.fulls[0] && A.dets[0] && A.fulls[0].id !== A.dets[0].id ? ` — 타수 지표는 ${dot(A.fulls[0].date)}, 퍼트·GIR 등은 퍼트를 기록한 ${dot(A.dets[0].date)} 라운드` : ""}. 점수는 설정의 0점·100점 기준으로 바꾼 값입니다(오른쪽 육각형). 예전에는 두 표(실력 진단·육각형 기준)에 같은 지표가 따로 있었는데 하나로 합쳤습니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 나머지는 퍼트를 기록한 라운드(${A.dets.length}회) 기준.</p>
       <div class="grid g2" style="margin-top:12px">
         <div class="card"><h3 class="mt0">7영역 육각형 <span class="muted">최근 상세 5R vs 전체</span></h3><div class="chart-box tall"><canvas id="cRadar"></canvas></div>
           <p class="legend-note">초록: 최근 5라운드 · 파랑: 전체 평균 · 주황 점선: 목표선(${settings.radarTarget}점).</p></div>
@@ -1049,10 +1054,12 @@
 
   // ───────────── 통계 ─────────────
   let trendYear = "";
+  let stabN = 10;   // 평균·안정성을 볼 최근 라운드 수(0 = 조건 전체)
   function statsView() {
     const fr = frounds();
     const A = S.analyze(fr, settings);
-    const ST = S.stability(A.fulls);
+    const ST = S.stability(stabN ? A.fulls.slice(0, stabN) : A.fulls), STall = S.stability(A.fulls);
+    const stabL = stabN ? `최근 ${stabN}R` : "조건 전체";
     const types = S.scoreTypes(fr);
     const bands = [["70대 이하", 0, 79], ["80대", 80, 89], ["90대", 90, 99], ["100 이상", 100, 999]].map(([l, a, b]) => ({ l, n: A.fulls.filter((r) => r.strokes >= a && r.strokes <= b).length }));
     const yr = [...new Set(A.rs.map((r) => r.year))].sort().map((y) => {
@@ -1072,10 +1079,11 @@
       <div id="stList"></div>
 
       <h2>평균 · 안정성 <span class="muted">18홀 ${A.fulls.length}회</span></h2>
+      <div class="chips" style="margin-bottom:8px">${[[5, "최근 5R"], [10, "최근 10R"], [0, "조건 전체"]].map(([v, l]) => `<button type="button" class="chip ${stabN === v ? "on" : ""}" data-sn="${v}">${l}</button>`).join("")}</div>
       <div class="kpis">
-        ${kpi("최근 10R 평균", f1(ST?.last10), "최근 18홀 10라운드")}
-        ${kpi("표준편차", isNum(ST?.sd) ? "±" + ST.sd.toFixed(1) : "-", "작을수록 점수가 안정적")}
-        ${kpi("최저 · 최고", ST ? `${ST.min} · ${ST.max}` : "-", "베스트 · 워스트")}
+        ${kpi(stabL + " 평균", f1(ST?.avg), ST ? `18홀 ${ST.n}라운드${stabN && STall ? ` · 전체 ${f1(STall.avg)}` : ""}` : "")}
+        ${kpi("표준편차", isNum(ST?.sd) ? "±" + ST.sd.toFixed(1) : "-", `작을수록 안정적${stabN && STall ? ` · 전체 ±${STall.sd.toFixed(1)}` : ""}`)}
+        ${kpi("최저 · 최고", ST ? `${ST.min} · ${ST.max}` : "-", stabL + " 베스트 · 워스트")}
       </div>
 
       <h2>기간별 평균 타수 <span class="muted">${TB.unit}별 (라운드별 추이는 홈)</span></h2>
@@ -1109,6 +1117,7 @@
       bindRows();
     }));
     app.querySelectorAll("[data-ty]").forEach((b) => (b.onclick = () => { trendYear = b.dataset.ty; statsView(); }));
+    app.querySelectorAll("[data-sn]").forEach((b) => (b.onclick = () => { stabN = Number(b.dataset.sn); statsView(); }));
     app.querySelectorAll("[data-course]").forEach((tr) => (tr.onclick = () => { F.course = tr.dataset.course; ls.set(KEY_FILTER, F); location.hash = "#/rounds"; }));
     const bindRows = () => app.querySelectorAll("tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
     bindRows();
@@ -1488,6 +1497,33 @@
     chart("cHole", { type: "bar", data: { labels: H.byHole.map((_, i) => i + 1), datasets: [{ data: H.byHole.map((h) => h.over), backgroundColor: H.byHole.map((h) => (h.over === maxO ? "#ff8f8f" : h.over === minO ? "#7aa7f7" : "#7fd1ae")) }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ...noGrid }, x: noGrid } }), plugins: [valueLabels(f1)] });
   }
 
+  // ───────────── 홀 메모 (샷 분석 ⑪ · 퍼트 탭) ─────────────
+  const TONE = { good: `<span class="pill ok">잘함</span>`, bad: `<span class="pill ng">미스</span>`, mix: `<span class="pill">잘함·미스</span>` };
+  let memoCat = "";
+  // only: 한 샷 종류만(퍼트 탭은 "putt"). 조각마다 샷 종류·판정을 달아 보여 준다
+  function memoBlock(fr, sel, only, title) {
+    const M = S.memoNotes(sel ? fr.filter((r) => r.id === sel) : fr);
+    const cat = only || memoCat;
+    const notes = M.notes.filter((n) => !cat || n.cats.includes(cat));
+    const scoreName = (v) => (!isNum(v) ? "" : v <= -1 ? "버디+" : v === 0 ? "파" : v === 1 ? "보기" : v === 2 ? "더블" : "+" + v);
+    const rows = notes.map((n) => `<tr class="click" data-id="${esc(n.rid)}"><td>${dot(n.date).slice(2)}<br><span class="muted">${esc(n.course)}</span></td><td><b>${n.h}</b>${isNum(n.par) ? `<br><span class="muted">파${n.par}</span>` : ""}</td><td>${scoreName(n.score)}${isNum(n.putts) ? `<br><span class="muted">${n.putts}퍼트${isNum(n.fp) && n.fp > 0 ? " · " + n.fp + "m" : ""}</span>` : ""}</td>
+      <td class="l wrap">${n.parts.filter((p) => !cat || p.cat === cat).map((p) => `${only ? "" : `<span class="pill" style="background:#eef1f6">${M.cats[p.cat]}</span> `}${esc(p.text)} ${TONE[p.tone] || ""}`).join("<br>")}</td></tr>`).join("");
+    const sum = only ? "" : `<div class="tbl-wrap"><table><thead><tr><th class="l">샷 종류</th><th>메모한 홀</th><th>잘함</th><th>미스</th><th>그 홀 평균 Score</th></tr></thead>
+      <tbody>${M.byCat.filter((c) => c.n).map((c) => `<tr class="click" data-mc="${c.k}"><td class="l"><b>${c.l}</b></td><td>${c.n}</td><td class="${c.good ? "ok" : ""}">${c.good}</td><td class="${c.bad > c.good ? "ng" : ""}">${c.bad}</td><td>${sgn(c.over)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="chips" style="margin:10px 0 8px"><button type="button" class="chip ${memoCat ? "" : "on"}" data-mc="">전체 ${M.notes.length}</button>${M.byCat.filter((c) => c.n).map((c) => `<button type="button" class="chip ${memoCat === c.k ? "on" : ""}" data-mc="${c.k}">${c.l} ${c.n}</button>`).join("")}</div>`;
+    const worst = M.byCat.filter((c) => c.k !== "etc" && c.bad).sort((a, b) => b.bad - a.bad || b.n - a.n)[0];
+    return `<div id="memoBox"><h3>${title} <span class="muted">메모 ${only ? notes.length : M.notes.length}홀</span></h3>
+      ${!M.notes.length ? `<p class="legend-note">아직 메모를 적은 홀이 없습니다. 라운드 입력의 홀별 「메모」 칸에 잘한 샷·미스한 샷을 적어 두면 여기에 모입니다.</p>` : `
+      ${!only && worst ? `<p class="legend-note"><b class="ng">미스 메모가 가장 많은 샷: ${worst.l}</b> (${worst.bad}번). 숫자보다 「어떤 미스가 반복되는지」를 아래 메모에서 확인하세요.</p>` : ""}
+      ${sum}
+      ${notes.length ? `<div class="tbl-wrap"><table><thead><tr><th>날짜</th><th>홀</th><th>결과</th><th class="l">메모</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="legend-note">이 종류로 분류된 메모가 없습니다.</p>`}
+      <p class="legend-note">메모 낱말로 자동 분류한 값이라 틀릴 수 있습니다(예: 「7 탑」→ 세컨·미스, 「첫펏 짤」→ 퍼트·미스, 「6번으로 온」→ 세컨·잘함). 문장마다 <b>티샷 · 세컨/7번 · 어프로치 · 벙커 · 펏</b>처럼 샷 이름을 앞에 쓰고 쉼표로 나누면 더 정확해집니다.</p>`}</div>`;
+  }
+  function bindMemo(rerender) {
+    document.querySelectorAll("#memoBox [data-mc]").forEach((b) => (b.onclick = () => { memoCat = b.dataset.mc; rerender(); }));
+    document.querySelectorAll("#memoBox tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
+  }
+
   // ───────────── 상세 분석 (v2 「상세분석」 시트) ─────────────
   function detailView() {
     const fr = frounds();
@@ -1528,9 +1564,114 @@
           </div>` + t("", ["거리대", "홀 수", "FW 안착", "평균 Score", "더블+ 비율"], DV.bands.map((x) => [x.l, x.n, pct(x.fwp), sgn(x.over), pct(x.dbl)]),
           "홀 입력의 「티샷 거리」를 적은 파4·파5 홀만 집계합니다. 멀리 칠수록 FW 안착이 떨어지고 스코어가 나빠지면, 거리보다 방향(컨트롤 샷)을 우선하는 편이 낫습니다. 평균 거리는 설정 → 내 클럽 거리의 드라이버 값으로 쓸 수 있습니다.");
       })()}
-      ${t("⑦ 그린 미스 · 어프로치 거리", ["", "홀 수", "평균 Score", "스크램블%"], D.green.map((x) => [x.l, x.n, sgn(x.over), x.scr === null ? "-" : pct(x.scr)]), "짧음이 대부분이면 한 클럽 길게, 30m 이상에서 스크램블이 낮으면 하프 웨지 거리 연습을 우선합니다.")}`;
+      ${t("⑦ 그린 미스 · 어프로치 거리", ["", "홀 수", "평균 Score", "스크램블%"], D.green.map((x) => [x.l, x.n, sgn(x.over), x.scr === null ? "-" : pct(x.scr)]), "짧음이 대부분이면 한 클럽 길게, 30m 이상에서 스크램블이 낮으면 하프 웨지 거리 연습을 우선합니다.")}
+      <div id="memoWrap">${memoBlock(fr, sel, "", "⑪ 홀 메모 · 잘한 샷과 미스")}</div>`;
+    const reMemo = () => { document.getElementById("memoWrap").innerHTML = memoBlock(fr, sel, "", "⑪ 홀 메모 · 잘한 샷과 미스"); bindMemo(reMemo); };
+    bindMemo(reMemo);
     document.getElementById("scope").onchange = (e) => { location.hash = "#/detail" + (e.target.value ? "?r=" + encodeURIComponent(e.target.value) : ""); };
     chart("cFp", { type: "bar", data: { labels: D.fp.map((x) => x.l), datasets: [{ label: "1퍼트율", data: D.fp.map((x) => x.one), backgroundColor: "#7fd1ae" }, { label: "3퍼트율", data: D.fp.map((x) => x.three), backgroundColor: "#ff8f8f" }] }, options: baseOpts({ plugins: legendOn, scales: { y: { beginAtZero: true, ticks: { callback: (v) => Math.round(v * 100) + "%" }, ...noGrid }, x: noGrid } }), plugins: [valueLabels(pct)] });
+  }
+
+  // ───────────── 퍼트 분석 ─────────────
+  // 짧은 퍼트(2m 이내)를 놓치는지, 긴 첫 퍼트를 못 붙여 3퍼트가 되는지를 나눠 본다
+  function puttsView() {
+    const fr = frounds();
+    const P = S.puttStats(fr);
+    const ids5 = new Set(P.rounds.slice(0, 5).map((r) => r.id));
+    const P5 = S.puttStats(fr.filter((r) => ids5.has(r.id)));
+    const per18 = (v) => (isNum(v) ? v * 18 : null);
+    const tbl = (heads, rows) => `<div class="tbl-wrap"><table><thead><tr>${heads.map((h, i) => `<th class="${i ? "" : "l"}">${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+    if (!P.n) {
+      app.innerHTML = `${head("putts")}<h2>퍼트 분석</h2><div class="notice">이 조건에는 퍼트를 기록한 홀이 없습니다. 라운드 입력에서 홀마다 <b>Putts</b>와 <b>1st 퍼트 거리</b>를 적으면 분석됩니다.</div>`;
+      return;
+    }
+    const lostS = P.lost.perRound(P.lost.short), lostL = P.lost.perRound(P.lost.long);
+    const causeTop = P.p3.cause.slice().sort((a, b) => b.n - a.n)[0];
+    const longIdx = P.p3.cause[2];
+    // 진단 문장: 짧은 퍼트·긴 퍼트·3퍼트 원인·GIR 홀
+    const dx = [];
+    if (P.short.n) dx.push(`<li><span class="${P.short.make < 0.5 ? "ng" : "ok"}">짧은 퍼트</span> 첫 퍼트 ${P.SHORT}m 이내 ${P.short.n}번 중 1퍼트 ${P.short.n - P.short.miss}번(<b>${pct(P.short.make)}</b>) — 놓친 짧은 퍼트 ${P.short.miss}번, 18홀당 ${f1(lostS)}타${P5.short.n ? ` · 최근 5R ${pct(P5.short.make)}` : ""}</li>`);
+    if (P.long.n) dx.push(`<li><span class="${P.long.three >= 0.25 ? "ng" : "ok"}">긴 퍼트</span> 첫 퍼트 ${P.LONG}m 이상 ${P.long.n}번 중 3퍼트 ${P.long.p3}번(<b>${pct(P.long.three)}</b>)${P.long.three >= 0.25 ? " — 첫 퍼트를 홀 가까이 붙이지 못해 3퍼트가 됩니다(거리감)" : ""}</li>`);
+    if (P.p3.n) dx.push(`<li><span class="ng">3퍼트 원인</span> ${P.p3.n}번 중 ${P.p3.cause.map((c) => `${c.l} ${c.n}번`).join(" · ")}${causeTop ? ` → 가장 많은 것: <b>${causeTop.l}</b>` : ""}</li>`);
+    dx.push(`<li><span class="ng">잃은 퍼트</span> 18홀당 <b>${f1(lostS + lostL)}타</b> = 짧은 퍼트(${P.SHORT}m 이내 1퍼트 실패) ${f1(lostS)}타 + 3m 이상 3퍼트 ${f1(lostL)}타 → ${lostL >= lostS ? "<b>긴 첫 퍼트 거리감</b>이 더 많이 잃습니다" : "<b>짧은 퍼트 마무리</b>가 더 많이 잃습니다"}</li>`);
+    if (P.gir.hit.n && P.gir.miss.n) dx.push(`<li><b>그린 적중 홀</b> 평균 퍼트 ${f2(P.gir.hit.putts)} · 첫 퍼트 ${f1(P.gir.hit.fp)}m · 3퍼트 ${pct(P.gir.hit.three)} / 그린 미스 홀 ${f2(P.gir.miss.putts)} · ${f1(P.gir.miss.fp)}m · ${pct(P.gir.miss.three)}${P.gir.hit.three > P.gir.miss.three ? " — 온그린을 하고도 먼 첫 퍼트에서 3퍼트가 많이 나옵니다" : ""}</li>`);
+    const drill = [];
+    if (P.short.n && P.short.make < 0.6) drill.push(`<li><b>1~2m 마무리</b>: 홀 주위 1m·1.5m·2m에 공을 두고 연속 성공 개수 세기, 퍼터 페이스 정렬(게이트) 연습</li>`);
+    if (longIdx && longIdx.n >= (causeTop?.n || 0)) drill.push(`<li><b>10m 이상 거리감</b>: 홀 대신 지름 1m 원 안에 멈추기(래그 퍼트), 10·15·20m 백스윙 크기 기준 만들기 — 「홀을 50cm 지나게」</li>`);
+    if (P.p3.cause[0].n && P.p3.cause[0].n >= P.p3.cause[1].n) drill.push(`<li><b>5m 이내 3퍼트</b>: 첫 퍼트가 짧았는지(홀에 못 미침)·길었는지 메모에 남겨 두면 원인이 보입니다</li>`);
+    const fr5 = (x, y) => `${x}${isNum(y) ? `<span class="muted"> · 최근 5R ${y}</span>` : ""}`;
+    const trend = P.rounds.slice(0, 15).reverse();
+    app.innerHTML = `${head("putts")}
+      <h2>퍼트 분석 <span class="muted">퍼트를 기록한 ${P.n}홀 · ${P.rounds.length}라운드</span></h2>
+      <div class="kpis">
+        ${kpi("라운드당 퍼트", f1(per18(P.pph)), fr5("18홀 기준", isNum(P5.pph) ? f1(per18(P5.pph)) : null))}
+        ${kpi("3퍼트", f1(per18(P.three)), fr5(`18홀당 · ${pct(P.three)}`, isNum(P5.three) ? f1(per18(P5.three)) : null), P.three * 18 > settings.targets.p3.v ? "ng" : "")}
+        ${kpi("1퍼트", pct(P.one), fr5("홀 비율", isNum(P5.one) ? pct(P5.one) : null))}
+        ${kpi(`${P.SHORT}m 이내 1퍼트`, pct(P.short.make), fr5(`${P.short.n}번 중 ${P.short.n - P.short.miss}번`, isNum(P5.short.make) ? pct(P5.short.make) : null), P.short.make < 0.5 ? "ng" : "")}
+        ${kpi("평균 첫 퍼트", isNum(P.fp) ? f1(P.fp) + "m" : "-", fr5("거리감·어프로치 정확도", isNum(P5.fp) ? f1(P5.fp) + "m" : null))}
+      </div>
+
+      <h3>문제 진단</h3>
+      <div class="card"><ul class="sw">${dx.join("")}</ul>
+        ${drill.length ? `<h3 class="mt0" style="margin-top:12px">연습 우선순위</h3><ul class="sw">${drill.join("")}</ul>` : ""}</div>
+
+      <h3>첫 퍼트 거리대별</h3>
+      ${tbl(["첫 퍼트 거리", "홀 수", "평균 퍼트", "1퍼트", "2퍼트", "3퍼트+"], P.bands.map((b) => `<tr><td class="l"><b>${b.l}</b></td><td>${b.n}</td><td>${f2(b.putts)}</td><td class="${b.l === "1~2m" && isNum(b.one) && b.one < 0.5 ? "ng" : ""}">${pct(b.one)}</td><td>${pct(b.two)}</td><td class="${isNum(b.three) && b.three >= 0.25 ? "ng" : ""}">${pct(b.three)}</td></tr>`))}
+      <div class="card" style="margin-top:8px"><div class="chart-box"><canvas id="cPB"></canvas></div>
+        <p class="legend-note">짧은 거리에서 1퍼트(초록)가 적으면 마무리, 먼 거리에서 3퍼트(빨강)가 많으면 첫 퍼트 거리감 문제입니다. 1st 퍼트 거리는 m 단위 기록 기준.</p></div>
+
+      <h3>3퍼트 원인 <span class="muted">첫 퍼트 거리로 나눔</span></h3>
+      ${tbl(["", "3퍼트 수", "비율"], P.p3.cause.map((c) => `<tr><td class="l">${c.l}</td><td><b>${c.n}</b></td><td>${pct(P.p3.n ? c.n / P.p3.n : null)}</td></tr>`))}
+
+      <h3>그린 적중(GIR) 여부별</h3>
+      ${tbl(["", "홀 수", "평균 퍼트", "평균 첫 퍼트", "1퍼트", "3퍼트"], [["GIR 성공", P.gir.hit], ["GIR 실패", P.gir.miss]].map(([l, x]) => `<tr><td class="l">${l}</td><td>${x.n}</td><td>${f2(x.putts)}</td><td>${isNum(x.fp) ? f1(x.fp) + "m" : "-"}</td><td>${pct(x.one)}</td><td>${pct(x.three)}</td></tr>`))}
+      <p class="legend-note">GIR 홀은 보통 첫 퍼트가 더 멉니다. GIR 홀 3퍼트가 많으면 「온그린은 했는데 타수를 못 줄이는」 상황이라 롱퍼트 거리감이 1순위입니다.</p>
+
+      <h3>라운드별 추이 <span class="muted">최근 ${trend.length}라운드</span></h3>
+      <div class="card"><div class="chart-box tall"><canvas id="cPT"></canvas></div></div>
+      ${tbl(["날짜", "골프장", "퍼트", "3퍼트", "1퍼트", "평균 첫 퍼트", `${P.SHORT}m 이내 놓침`], P.rounds.slice(0, 15).map((r) => `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date).slice(2)}</td><td class="l">${esc(r.course)}${r.holes !== 18 ? ` <span class="muted">${r.holes}홀</span>` : ""}</td><td><b>${r.putts}</b></td><td class="${r.p3 > settings.targets.p3.v ? "ng" : ""}">${r.p3}</td><td>${r.onep}</td><td>${isNum(r.fp) ? f1(r.fp) + "m" : "-"}</td><td class="${r.shortMiss && r.shortMiss >= r.shortN / 2 ? "ng" : ""}">${r.shortN ? `${r.shortMiss} / ${r.shortN}` : "-"}</td></tr>`))}
+
+      <h3>문제 홀 목록</h3>
+      <details class="card" style="margin-bottom:8px"><summary><b>놓친 짧은 퍼트</b> <span class="muted">${P.SHORT}m 이내에서 2퍼트 이상 · ${P.short.list.length}홀</span></summary>${holeList(P.short.list)}</details>
+      <details class="card"><summary><b>3퍼트 홀</b> <span class="muted">${P.p3.list.length}홀</span></summary>${holeList(P.p3.list)}</details>
+
+      <div id="memoWrap">${memoBlock(fr, "", "putt", "퍼트 메모")}</div>`;
+    function holeList(list) {
+      return list.length ? tbl(["날짜", "골프장", "홀", "첫 퍼트", "퍼트", "Score", "메모"], list.map((h) => `<tr class="click" data-id="${esc(h.rid)}"><td>${dot(h.date).slice(2)}</td><td class="l">${esc(h.course)}</td><td>${h.h}${isNum(h.par) ? ` <span class="muted">파${h.par}</span>` : ""}</td><td>${isNum(h.fp) ? h.fp + "m" : "-"}</td><td><b>${h.putts}</b></td><td>${sgn(h.score, 0)}</td><td class="l wrap">${esc(h.memo || "")}</td></tr>`)) : `<p class="legend-note">없습니다.</p>`;
+    }
+    app.querySelectorAll("tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
+    bindMemo(() => {});
+    const C1 = "#7fd1ae", C2 = "#7aa7f7", C3 = "#ff8f8f";
+    chart("cPB", {
+      type: "bar",
+      data: { labels: P.bands.map((b) => `${b.l} (${b.n})`), datasets: [["1퍼트", "one", C1], ["2퍼트", "two", C2], ["3퍼트+", "three", C3]].map(([l, k, c]) => ({ label: l, data: P.bands.map((b) => b[k]), backgroundColor: c })) },
+      options: baseOpts({ plugins: legendOn, scales: { x: { stacked: true, ...noGrid }, y: { stacked: true, max: 1, beginAtZero: true, ticks: { callback: (v) => Math.round(v * 100) + "%" }, ...noGrid } } }),
+      plugins: [{
+        id: "stackPct",
+        afterDatasetsDraw(c) {
+          const ctx = c.ctx;
+          ctx.save(); ctx.font = "600 11px Pretendard, sans-serif"; ctx.fillStyle = "#333"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          c.data.datasets.forEach((ds, i) => c.getDatasetMeta(i).data.forEach((el, j) => {
+            const v = ds.data[j];
+            if (isNum(v) && v >= 0.08) { const { x, y, base } = el.getProps(["x", "y", "base"], true); ctx.fillText(pct(v), x, (y + base) / 2); }
+          }));
+          ctx.restore();
+        },
+      }],
+    });
+    chart("cPT", {
+      type: "bar",
+      data: {
+        labels: trend.map((r) => r.date.slice(2).replaceAll("-", ".")),
+        datasets: [
+          { type: "line", label: "퍼트 수", data: trend.map((r) => r.putts), borderColor: C2, backgroundColor: C2, yAxisID: "y", pointRadius: 2.5, tension: 0 },
+          { type: "bar", label: "3퍼트", data: trend.map((r) => r.p3), backgroundColor: C3, yAxisID: "y1" },
+          { type: "bar", label: `${P.SHORT}m 이내 놓침`, data: trend.map((r) => (r.shortN ? r.shortMiss : null)), backgroundColor: "#ffd27a", yAxisID: "y1" },
+        ],
+      },
+      options: baseOpts({ plugins: legendOn, scales: { y: { position: "left", suggestedMin: 28, suggestedMax: 42, ...noGrid }, y1: { position: "right", beginAtZero: true, suggestedMax: 8, ticks: { precision: 0 }, ...noGrid }, x: noGrid } }),
+      plugins: [valueLabels((v) => v)],
+    });
   }
 
   // ───────────── 사용자 가이드 ─────────────
