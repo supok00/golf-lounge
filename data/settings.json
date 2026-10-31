@@ -188,5 +188,23 @@
  ],
  "regions": {
   "로얄링스CC": "충북"
+ },
+ "scores": {
+  "strokes": {
+   "zero": 110,
+   "full": 79
+  },
+  "parlow": {
+   "zero": 0,
+   "full": 10
+  },
+  "dbl": {
+   "zero": 10,
+   "full": 1
+  },
+  "pen": {
+   "zero": 8,
+   "full": 1
+  }
  }
 }

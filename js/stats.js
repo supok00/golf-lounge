@@ -22,6 +22,13 @@ const GolfStats = (() => {
       crisis: { label: "위기관리", metric: "18홀당 벌타+더블+ 초과타", zero: 12, full: 0 },
     },
     radarTarget: 70,
+    // 육각형에 없는 지표(타수 계열·벌타)도 실력 진단 표에 0~100점을 보여 주려고 따로 둔 기준(육각형 모양은 그대로 7영역)
+    scores: {
+      strokes: { zero: 110, full: 80 },
+      parlow: { zero: 0, full: 12 },
+      dbl: { zero: 10, full: 1 },
+      pen: { zero: 8, full: 0 },
+    },
     targets: {
       strokes: { label: "평균 타수", v: 89, low: true, fmt: "1" },
       parlow: { label: "파 이하 홀 수", v: 6, low: false, fmt: "1" },
@@ -110,11 +117,11 @@ const GolfStats = (() => {
     return out;
   }
 
-  function radarScore(key, v, settings) {
-    if (!isNum(v)) return null;
-    const c = settings.radar[key];
-    return Math.round(Math.max(0, Math.min(100, ((v - c.zero) / (c.full - c.zero)) * 100)));
-  }
+  // 0점·100점 기준 사이를 직선으로 나눠 0~100점
+  const linScore = (c, v) => (!isNum(v) || !c || c.full === c.zero ? null : Math.round(Math.max(0, Math.min(100, ((v - c.zero) / (c.full - c.zero)) * 100))));
+  const radarScore = (key, v, settings) => linScore(settings.radar[key], v);
+  // 점수가 pt점이 되는 실제 값(목표가 따로 없는 거리감·위기관리는 육각형 목표선 점수의 값을 목표로 본다)
+  const valueAt = (c, pt) => (c ? c.zero + ((c.full - c.zero) * pt) / 100 : null);
   const radarOf = (list, settings) => {
     const pick = (k) => avg(list.map((r) => r[k]).filter(isNum));
     const raw = { fw: pick("fwp"), gir: pick("girp"), scr: pick("scrp"), pph: pick("pph"), p3: pick("p3r"), fp: pick("fp"), crisis: pick("crisis") };
@@ -423,5 +430,5 @@ const GolfStats = (() => {
     };
   }
 
-  return { DEFAULT_SETTINGS, TARGET_BASIS, round, analyze, holeLevel, detailBlocks, holeGir, holeCheck, byRecent, isNum, avg, sum, scoreTypes, stability, trendBuckets, insights, memoNotes, puttStats };
+  return { DEFAULT_SETTINGS, TARGET_BASIS, linScore, valueAt, round, analyze, holeLevel, detailBlocks, holeGir, holeCheck, byRecent, isNum, avg, sum, scoreTypes, stability, trendBuckets, insights, memoNotes, puttStats };
 })();
