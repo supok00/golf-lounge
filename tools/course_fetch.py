@@ -79,7 +79,7 @@ def fetch_page(url):
     for m in re.finditer(r'<(a|frame|iframe|area)\b[^>]*?(href|src)=["\']([^"\'#]+)["\'][^>]*>([^<]{0,60})', html, re.I):
         u = urljoin(base, unescape(m.group(3)))
         if u.startswith("http") and not u.lower().endswith((".css", ".js")):
-            text = re.sub(r"\s+", " ", m.group(4) or "").strip()[:40]
+            text = re.sub(r"\s+", " ", unescape(m.group(4) or "")).strip()[:40]
             links.append(f"{text} -> {u}" if text else u)
     for m in re.finditer(r'<img\b[^>]*?src=["\']([^"\']+)["\'][^>]*>', html, re.I):
         alt = re.search(r'alt=["\']([^"\']*)', m.group(0), re.I)
