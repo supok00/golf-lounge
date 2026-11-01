@@ -44,6 +44,24 @@
   }
  },
  "radarTarget": 100,
+ "scores": {
+  "strokes": {
+   "zero": 110,
+   "full": 79
+  },
+  "parlow": {
+   "zero": 0,
+   "full": 10
+  },
+  "dbl": {
+   "zero": 10,
+   "full": 1
+  },
+  "pen": {
+   "zero": 8,
+   "full": 1
+  }
+ },
  "targets": {
   "strokes": {
    "label": "평균 타수",
@@ -128,83 +146,65 @@
   {
    "key": "4i",
    "label": "4번 아이언",
-   "dist": 175,
+   "dist": 180,
    "on": true
   },
   {
    "key": "5i",
    "label": "5번 아이언",
-   "dist": 165,
+   "dist": 170,
    "on": true
   },
   {
    "key": "6i",
    "label": "6번 아이언",
-   "dist": 155,
+   "dist": 160,
    "on": true
   },
   {
    "key": "7i",
    "label": "7번 아이언",
-   "dist": 145,
+   "dist": 150,
    "on": true
   },
   {
    "key": "8i",
    "label": "8번 아이언",
-   "dist": 135,
+   "dist": 140,
    "on": true
   },
   {
    "key": "9i",
    "label": "9번 아이언",
-   "dist": 125,
+   "dist": 130,
    "on": true
   },
   {
    "key": "PW",
    "label": "피칭 웨지",
-   "dist": 110,
+   "dist": 120,
    "on": true
   },
   {
    "key": "AW",
    "label": "어프로치 웨지(50°)",
-   "dist": 95,
+   "dist": 100,
    "on": true
   },
   {
    "key": "SW",
    "label": "샌드 웨지(54°)",
-   "dist": 85,
+   "dist": 90,
    "on": true
   },
   {
    "key": "LW",
    "label": "로브 웨지(58°)",
-   "dist": 75,
+   "dist": 80,
    "on": true
   }
  ],
  "regions": {
   "로얄링스CC": "충북"
- },
- "scores": {
-  "strokes": {
-   "zero": 110,
-   "full": 79
-  },
-  "parlow": {
-   "zero": 0,
-   "full": 10
-  },
-  "dbl": {
-   "zero": 10,
-   "full": 1
-  },
-  "pen": {
-   "zero": 8,
-   "full": 1
-  }
  }
 }
