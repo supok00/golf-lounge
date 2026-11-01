@@ -14,6 +14,7 @@
   let source = "";
   let loadedAt = null;
   let charts = [];
+  let courseDB = [];   // data/courses.json: 골프장 홈페이지에서 옮긴 코스별 Par·핸디캡·거리·공략(라운드 전 등록용)
 
   // ───────────── 유틸 ─────────────
   const isNum = S.isNum;
@@ -109,6 +110,9 @@
       }
       const s = await G.load(G.SETTINGS);
       if (s.data) settings = deepMerge(structuredClone(S.DEFAULT_SETTINGS), s.data);
+      // 골프장 정보는 자주 안 바뀌어 GitHub API(시간당 한도) 대신 배포본을 바로 읽는다
+      const c = await fetch(`data/courses.json?t=${Date.now()}`, { cache: "no-store" }).catch(() => null);
+      if (c && c.ok) courseDB = await c.json().catch(() => []);
       if (!quiet) toast(source === "github" ? "GitHub 최신 데이터를 불러왔습니다." : "배포본 데이터를 불러왔습니다(GitHub API 한도 초과 등).");
     } catch (e) {
       const cached = ls.get(KEY_CACHE);
@@ -144,6 +148,56 @@
     renderStatus();
   }
 
+  // ───────────── 골프장 정보 (data/courses.json) ─────────────
+  // 이름은 띄어쓰기·「CC/GC/컨트리클럽」 표기가 달라도 같은 골프장으로 본다
+  const normName = (x) => String(x || "").toLowerCase().replace(/\s+/g, "").replace(/(cc|gc|c\.c|컨트리클럽|골프클럽|골프장|cc\))$/, "");
+  const TEE_KO = { 화이트: "white", 블루: "blue", 레드: "red", 블랙: "black", 골드: "gold", 레귤러: "white" };
+  const teeKey = (t) => { const x = String(t || "").trim().toLowerCase(); return TEE_KO[x] || x; };
+  const findCourse = (name) => courseDB.find((c) => [c.name, ...(c.alias || [])].some((a) => normName(a) === normName(name)));
+  /* 라운드의 골프장·전반/후반 코스·티로 18홀 정보를 만든다. 18홀짜리 코스(예: 아시아나 동)는 전반=1~9, 후반=10~18.
+   * 반환 { club, tee, green, holes:[{h, par, hcp, dist(m), distR(다른 그린 m), tip}] } 또는 null */
+  function courseHoles(r) {
+    const club = findCourse(r.course);
+    if (!club) return null;
+    let tee = null, green = "";
+    const nine = (name, back) => {
+      const cs = club.courses.find((x) => normName(x.name) === normName(name)) || (club.courses.length === 1 ? club.courses[0] : null);
+      const tk = cs && Object.keys(cs.tees || {}).find((k) => teeKey(k) === teeKey(r.tee));
+      if (!tk) return [];
+      tee = tk; green = cs.tees[tk].green || green;
+      let hs = cs.tees[tk].holes;
+      if (hs.length === 18) hs = hs.filter((h) => (back ? h.h > 9 : h.h <= 9));
+      return hs.map((h, i) => ({ ...h, h: (back ? 10 : 1) + i }));
+    };
+    const holes = [...nine(r.front, false), ...nine(r.back || r.front, true)];
+    return holes.length ? { club, tee, green, holes } : null;
+  }
+  // 코스 정보가 있는 골프장·코스·티 이름(입력 화면 안내용)
+  const courseChoices = () => courseDB.flatMap((c) => c.courses.flatMap((cs) => Object.keys(cs.tees || {}).map((t) => `${c.name} ${cs.name}코스 ${t}`)));
+  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  const dday = (d) => Math.round((new Date(d + "T00:00:00") - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00")) / 864e5);
+
+  /* 홀별 야디지·공략 카드: 코스 정보(courses.json)의 거리·공략 + 내 클럽 거리로 만든 추정 공략 */
+  function courseGuide(r) {
+    const CH = courseHoles(r);
+    const hm = Object.fromEntries((r.holes || []).map((h) => [h.h, h]));
+    const rows = Array.from({ length: 18 }, (_, i) => {
+      const c = CH?.holes.find((x) => x.h === i + 1) || {}, h = hm[i + 1] || {};
+      const par = h.par ?? c.par, dist = h.dist ?? c.dist;
+      return { h: i + 1, par, hcp: h.hcp ?? c.hcp, dist, distR: c.distR, tip: c.tip, plan: Clubs.plan(par, dist, Clubs.bag(settings)) };
+    }).filter((x) => isNum(x.par));
+    if (!rows.length) return "";
+    const tot = (a, b, k) => S.sum(rows.filter((x) => x.h >= a && x.h <= b && isNum(x[k])).map((x) => x[k]));
+    const card = (x) => `<div class="hg">
+      <div class="hg-top"><b class="hg-n">${x.h}</b><span>파${x.par}</span>${isNum(x.hcp) ? `<span class="muted">HDCP ${x.hcp}</span>` : ""}
+        <span class="hg-yd">${isNum(x.dist) ? `<b>${x.dist}</b>m` : ""}</span>${isNum(x.distR) ? `<span class="muted">${CH?.green === "좌" ? "우그린" : "다른 그린"} ${x.distR}m</span>` : ""}</div>
+      ${x.plan ? `<div class="hg-plan">🏌️ <span class="muted">내 공략(추정)</span> ${x.plan.text}</div>` : ""}
+      ${x.tip ? `<div class="hg-tip">📍 ${esc(x.tip)}</div>` : ""}</div>`;
+    return `<h3>홀별 야디지 · 공략 <span class="muted">${CH ? `${esc(CH.club.name)} ${esc(CH.tee)} 티${CH.green ? ` · ${CH.green}그린 기준` : ""}` : "입력한 거리 기준"} · OUT ${tot(1, 9, "dist")}m · IN ${tot(10, 18, "dist")}m</span></h3>
+      <div class="hguide">${rows.map(card).join("")}</div>
+      <p class="legend-note">「내 공략」은 <a href="#/settings">내 클럽 거리</a>로 계산한 추정입니다(티샷은 드라이버 평균 거리 가정${Clubs.isDefault(settings) ? ", 지금은 예시 클럽 거리" : ""}). 「📍」는 골프장 홈페이지 코스 안내를 요약한 공략입니다. 거리는 모두 미터(홈페이지 야드 × 0.9144)입니다.${CH?.club.url ? ` 출처: <a href="${esc(CH.club.url)}" target="_blank" rel="noopener">${esc(CH.club.name)} 홈페이지</a> (${esc(CH.club.updated || "")})` : ""}</p>`;
+  }
+
   // ───────────── 공통 필터 (모든 분석 화면에 같은 조건) ─────────────
   let F = { period: "all", course: "", full: false, ...(ls.get(KEY_FILTER) || {}) };
   if (F.period === "lastMonth") F.period = "all";   // 「지난 달」은 2026.10.31에 없앴다(기기에 남은 예전 조건)
@@ -157,7 +211,7 @@
     return true;
   }
   function frounds() {
-    const list = rounds.filter((r) => inPeriod(r.date || "") && (!F.course || String(r.course).includes(F.course)) && (!F.full || S.round(r).full));
+    const list = rounds.filter((r) => !r.planned && inPeriod(r.date || "") && (!F.course || String(r.course).includes(F.course)) && (!F.full || S.round(r).full));
     // 「최근 라운드」: 골프장·18홀 조건에 맞는 라운드 중 가장 최근 1개만
     return F.period === "recent" ? S.byRecent(list).slice(0, 1) : list;
   }
@@ -317,6 +371,15 @@
     const v = S.valueAt(settings.radar[u.r], settings.radarTarget);
     return { v, low: u.low, fmt: u.r === "fp" ? "m" : "1" };
   }
+  // 홈 맨 위: 오늘 이후 예정 라운드(라운드 전에 코스 정보만 등록해 둔 것)
+  function upcomingBox() {
+    const up = rounds.filter((r) => r.planned && dday(r.date) >= 0).sort((a, b) => (a.date < b.date ? -1 : 1));
+    if (!up.length) return "";
+    return `<div class="card upcoming">${up.map((r) => { const d = dday(r.date), CH = courseHoles(r); return `<div class="row" style="justify-content:space-between">
+      <div>⛳ <b>다가오는 라운드</b> <span class="pill ${d <= 3 ? "ng" : ""}">${d === 0 ? "오늘" : "D-" + d}</span><br>
+        <b>${dot(r.date)}(${DOW[new Date(r.date + "T00:00:00").getDay()]})</b> ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join("·"))}${r.tee ? " · " + esc(r.tee) : ""}${CH ? ` · ${CH.holes.reduce((a, h) => a + (h.dist || 0), 0)}m` : ""}</span></div>
+      <a class="btn" href="#/round/${encodeURIComponent(r.id)}">홀별 공략 보기</a></div>`; }).join("<hr>")}</div>`;
+  }
   function dashboard() {
     const fr = frounds();
     const A = S.analyze(fr, settings);
@@ -335,6 +398,7 @@
     const lastD = (A.fulls[0] || A.dets[0] || {}).date;
     app.innerHTML = `
       ${welcomeBox()}
+      ${upcomingBox()}
       <div class="notice" style="margin-bottom:10px">🆕 겹치던 통계·분석·설정을 정리했습니다. <a href="#/review">무엇을 정리했나 보기 (${REVIEW.length}가지)</a></div>
       ${head("dashboard")}
       <h2>요약</h2>
@@ -417,6 +481,29 @@
       options: baseOpts({ plugins: legendOn, scales: { y: { suggestedMin: 75, suggestedMax: 110 }, x: noGrid } }),
       plugins: [valueLabels((v) => v, (v, j, ds) => (ds.label !== "총타수" ? null : v > trendMA[j] ? UP : v < trendMA[j] ? DOWN : null))],
     });
+  }
+
+  // 예정 라운드: 스코어 없이 코스 정보만 있는 라운드. 홀별 야디지·공략을 보고, 끝나면 스코어를 입력한다
+  function plannedView(r) {
+    const d = dday(r.date);
+    app.innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <h2>${dot(r.date)}(${DOW[new Date(r.date + "T00:00:00").getDay()]}) ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join(" / "))}${r.tee ? " · " + esc(r.tee) : ""}${r.region ? " · 📍" + esc(r.region) : ""}</span></h2>
+        <div class="row"><a class="btn" href="#/edit/${encodeURIComponent(r.id)}">스코어 입력</a><button class="btn danger" id="bDel" type="button" ${G.canWrite() ? "" : "disabled"}>삭제</button></div>
+      </div>
+      <div class="notice"><span class="pill ${d >= 0 && d <= 3 ? "ng" : ""}">${d > 0 ? "D-" + d : d === 0 ? "오늘" : "지난 예정"}</span> 예정 라운드입니다. 통계에는 들어가지 않고, 「스코어 입력」으로 홀별 스코어를 넣어 저장하면 일반 라운드가 됩니다(스마트스코어 붙여넣기로 같은 날짜·골프장을 등록해도 이 예정 라운드를 대신합니다).</div>
+      ${r.memo ? `<p class="card" style="margin-top:12px">${esc(r.memo)}</p>` : ""}
+      ${scorecard(r, true)}
+      ${courseGuide(r) || `<p class="muted">Par·거리를 입력하면 홀별 공략이 나옵니다.</p>`}
+      <div id="delBox"></div>
+      <p><a href="#/rounds">← 목록으로</a></p>`;
+    document.getElementById("bDel").onclick = () => {
+      document.getElementById("delBox").innerHTML = `<div class="notice">이 예정 라운드를 삭제할까요? <button class="btn danger" id="bDel2" type="button">삭제 확인</button></div>`;
+      document.getElementById("bDel2").onclick = async () => {
+        try { await commit((data) => data.filter((x) => x.id !== r.id), `예정 라운드 삭제: ${r.date} ${r.course}`); toast("삭제했습니다."); location.hash = "#/rounds"; }
+        catch (e) { toast(e.message, 6000); }
+      };
+    };
   }
 
   // ───────────── 라운드 입력 (v2 스코어카드 전 항목) ─────────────
@@ -524,7 +611,8 @@
         </div>
         <datalist id="courseList">${courses.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
         <datalist id="teeList">${tees.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
-        <div class="row" style="margin-top:10px"><button class="btn ghost" id="bCourse" type="button">이전 라운드 코스 정보 불러오기 (Par·거리·핸디캡)</button></div>
+        <div class="row" style="margin-top:10px"><button class="btn ghost" id="bCourseDB" type="button">⛳ 골프장 정보 불러오기 (Par·핸디캡·거리·공략)</button><button class="btn ghost" id="bCourse" type="button">이전 라운드 코스 정보 불러오기</button></div>
+        <p class="legend-note">「골프장 정보」는 골프장 홈페이지에서 옮겨 둔 코스 자료입니다${courseDB.length ? ` — 지금 등록: ${esc(courseChoices().join(", "))}` : ""}. 골프장·전반/후반 코스·티를 먼저 적고 누르세요. 라운드 전에 스코어 없이 저장하면 <b>예정 라운드</b>로 등록되어 홈과 라운드 목록에서 홀별 공략을 볼 수 있습니다.</p>
       </div>
 
       <div class="holenav" id="holeNav"></div>
@@ -582,8 +670,10 @@
         </div>
         ${(() => {
           const p = Clubs.plan(h.par, h.dist, Clubs.bag(settings));
-          if (p) return `<div class="plan">🏌️ <b>공략 가이드</b> <span class="muted">(추정)</span> ${p.text}</div>`;
-          return isNum(h.par) ? `<div class="plan muted">거리를 넣으면 내 클럽 거리로 공략 가이드가 나옵니다</div>` : "";
+          const c = courseHoles(meta())?.holes.find((x) => x.h === cur);
+          const tip = c ? `<div class="plan">📍 <b>코스 공략</b> <span class="muted">${isNum(c.dist) ? `${c.dist}m${isNum(c.distR) ? ` (다른 그린 ${c.distR}m)` : ""}` : ""}</span> ${esc(c.tip || "")}</div>` : "";
+          if (p) return `<div class="plan">🏌️ <b>공략 가이드</b> <span class="muted">(추정)</span> ${p.text}</div>` + tip;
+          return (isNum(h.par) ? `<div class="plan muted">거리를 넣으면 내 클럽 거리로 공략 가이드가 나옵니다</div>` : "") + tip;
         })()}
         ${FIELDS.map(([g, fs]) => `<div class="fgroup"><div class="fg-title">${g}</div><div class="form">${fs.map(field).join("")}</div></div>`).join("")}`;
       $("holeCard").querySelectorAll("[data-k]").forEach((el) => {
@@ -690,13 +780,25 @@
       toast((nPar ? `Par·핸디캡: ${[...new Set(src)].join(", ")} 기록에서 불러왔습니다.` : "같은 코스명의 이전 기록이 없어 Par·핸디캡을 채우지 못했습니다.")
         + "\n" + (nDist ? `거리: 같은 티(${m.tee})로 친 기록에서 불러왔습니다.` : `거리: ${m.tee ? `같은 티(${m.tee})로 친` : "티를 적은"} 기록이 없어 비워 두었습니다. 스코어카드의 ${m.tee || "친 티"} 거리를 넣어 주세요.`), 6000);
     };
+    $("bCourseDB").onclick = () => {
+      const m = meta(), CH = courseHoles(m);
+      if (!CH) return toast(findCourse(m.course) ? `${m.course}에 「${m.front || "?"}」 코스 · 「${m.tee || "?"}」 티 정보가 없습니다. 등록된 것: ${courseChoices().join(", ")}` : `「${m.course || "골프장"}」 정보가 아직 없습니다. 등록된 골프장: ${courseChoices().join(", ") || "없음"}`, 6000);
+      for (const c of CH.holes) { for (const k of ["par", "hcp", "dist"]) if (isNum(c[k])) { H[c.h][k] = c[k]; AUTO[c.h].delete(k); } autoFill(c.h); }
+      if (!$("fRegion").value && CH.club.region) $("fRegion").value = CH.club.region;
+      saveDraft();
+      drawAll();
+      toast(`${CH.club.name} ${CH.tee} 티${CH.green ? `(${CH.green}그린)` : ""} 기준 ${CH.holes.length}홀의 Par·핸디캡·거리를 넣었습니다. 홀 카드에 공략이 나옵니다.`, 5000);
+    };
     $("bSave").onclick = async () => {
       const m = meta();
       const hs = holesArr();
       if (!m.date || !m.course) return toast("날짜와 골프장을 입력하세요.");
-      if (!hs.some((h) => isNum(h.score))) return toast("스코어를 한 홀 이상 입력하세요.");
+      // 스코어가 하나도 없으면 라운드 전 「예정 라운드」로 저장(코스 정보만). 스코어를 넣으면 일반 라운드가 된다
+      const planned = !hs.some((h) => isNum(h.score));
+      if (planned && !hs.some((h) => isNum(h.par))) return toast("스코어를 한 홀 이상 입력하세요(라운드 전이면 Par·거리만 넣어 예정 라운드로 저장할 수 있습니다).", 5000);
       // 수정할 때 입력 화면에 없는 값(티오프 시간 등)은 그대로 둔다
       const obj = { ...(edit || {}), id: edit ? edit.id : "r" + m.date.replaceAll("-", "") + "-" + Date.now().toString(36), ...m, holes: hs };
+      if (planned) obj.planned = true; else delete obj.planned;
       $("bSave").disabled = true;
       $("bSave").textContent = "저장 중…";
       try {
@@ -708,12 +810,12 @@
           const i = data.findIndex((x) => x.id === obj.id);
           if (i >= 0) data[i] = obj; else data.push(obj);
           return data.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-        }, `${edit ? "라운드 수정" : "라운드 추가"}: ${m.date} ${m.course}`);
+        }, `${planned ? "예정 라운드" : edit ? "라운드 수정" : "라운드 추가"}: ${m.date} ${m.course}`);
         for (const p of photoSt.removed) await G.deleteFile(p, `사진 삭제: ${what}`).catch(() => null);
         if (ph.errs.length) toast("사진은 저장했지만 다른 저장소 동기화 실패: " + ph.errs.join(" / "), 6000);
         ls.del(draftKey);
         ls.del(photoKey);
-        toast("GitHub에 저장했습니다.");
+        toast(planned ? "예정 라운드로 저장했습니다. 라운드가 끝나면 「스코어 입력」으로 이어서 넣으세요." : "GitHub에 저장했습니다.", 4000);
         location.hash = "#/round/" + encodeURIComponent(obj.id);
       } catch (e) {
         toast(e.message, 6000);
@@ -1062,7 +1164,12 @@
   // ───────────── 라운드 목록·상세 ─────────────
   function roundsView() {
     const list = S.byRecent(frounds());
+    const plans = rounds.filter((r) => r.planned).sort((a, b) => (a.date < b.date ? 1 : -1));
     app.innerHTML = `${head("rounds")}
+      ${plans.length ? `<h3>예정 라운드 <span class="muted">코스 정보만 등록 · 끝나면 「스코어 입력」</span></h3>
+      <div class="tbl-wrap"><table><thead><tr><th>날짜</th><th class="l">골프장</th><th class="l">코스 · 티</th><th>Par</th><th>거리</th><th></th></tr></thead>
+        <tbody>${plans.map((r) => { const d = dday(r.date), par = S.sum((r.holes || []).filter((h) => isNum(h.par)).map((h) => h.par)), m = S.sum((r.holes || []).filter((h) => isNum(h.dist)).map((h) => h.dist));
+          return `<tr class="click" data-id="${esc(r.id)}"><td>${dot(r.date)}</td><td class="l">${esc(r.course)}</td><td class="l">${esc([r.front, r.back].filter(Boolean).join("·"))} ${esc(r.tee || "")}</td><td>${par || "-"}</td><td>${m ? m + "m" : "-"}</td><td><span class="pill ${d >= 0 && d <= 3 ? "ng" : ""}">${d > 0 ? "D-" + d : d === 0 ? "오늘" : "지남"}</span></td></tr>`; }).join("")}</tbody></table></div>` : ""}
       <div class="row" style="justify-content:space-between"><h2>라운드 목록 <span class="muted">${list.length}회</span></h2><a class="btn" href="#/input">+ 새 라운드</a></div>
       <div class="tbl-wrap"><table>
         <thead><tr><th>날짜</th><th class="l">골프장</th><th>홀</th><th>총타수</th><th>오버</th><th>전반</th><th>후반</th><th>퍼트</th><th>GIR</th><th>FW</th><th>드라이버</th><th>더블+</th><th>벌타</th></tr></thead>
@@ -1076,6 +1183,7 @@
   function roundView(id) {
     const r = rounds.find((x) => x.id === id);
     if (!r) { app.innerHTML = `<p>라운드를 찾을 수 없습니다. <a href="#/rounds">목록으로</a></p>`; return; }
+    if (r.planned) return plannedView(r);
     const s = S.round(r);
     const R1 = S.analyze([r], settings).radar;   // 이 라운드 한 개의 지표 → 점수
     const rad = R1.score;
@@ -1105,6 +1213,7 @@
             <tbody>${Object.entries(settings.radar).map(([k, c]) => `<tr><td class="l"><b>${c.label}</b><br><span class="muted">${c.metric}</span></td><td>${rawFmt(k, R1.raw[k])}</td><td class="${isNum(rad[k]) ? (rad[k] >= settings.radarTarget ? "ok" : "ng") : ""}"><b>${rad[k] ?? "-"}</b></td><td class="muted">${rawFmt(k, c.full)}</td></tr>`).join("")}</tbody></table></div>
         </div>
         <p class="legend-note">이 라운드 <b>한 경기만</b>의 지표를 점수로 바꾼 것입니다(홈의 육각형은 최근 5라운드 평균이라 한 경기보다 덜 들쭉날쭉합니다). 주황 점선은 목표선 ${settings.radarTarget}점, 표의 「100점 기준」이 그 목표에 해당하는 실제 값입니다.</p></div>` : ""}
+      ${courseHoles(r) ? `<details class="card" style="margin-top:12px"><summary><b>홀별 야디지 · 공략</b> <span class="muted">${esc(r.course)} 코스 정보</span></summary>${courseGuide(r)}</details>` : ""}
       <h3>동반자 비교 <span class="muted">${(r.companions || []).length ? (r.companions || []).length + "명" : "없음"}</span></h3>
       ${companionCompare(r) || `<p class="muted">함께 친 동반자의 점수를 넣으면 순위·홀별로 비교합니다.</p>`}
       <div class="row" style="margin-top:10px"><button class="btn ghost" id="bComp" type="button">👥 동반자·사진 ${(r.companions || []).length || (r.photos || []).length ? "편집" : "추가"}</button></div>
@@ -1403,7 +1512,7 @@
     $("bParse").onclick = () => {
       parsed = SmartScore.parse($("ssText").value).map((r) => {
         const course = SmartScore.matchCourse(r.course, known);
-        const dup = rounds.some((x) => x.date === r.date && x.course === course);
+        const dup = rounds.some((x) => !x.planned && x.date === r.date && x.course === course);
         const st = { comps: applyAlias(Companions.parse(r.block, parsOf(r), { skipScore: true })), photos: [], removed: [], text: "" };
         return { ...r, course, origCourse: r.course, dup, pick: !dup && r.holes.length > 0, st };
       });
@@ -1505,7 +1614,7 @@
         if (me.orig && me.orig !== "나") ls.set(KEY_ME, me.orig);
         const holes = me.holes.map(({ h, st }) => ({ h, par: card.pars[h], score: st - card.pars[h] }));
         const comps = card.players.filter((_, i) => i !== card.me);
-        const dup = rounds.some((x) => x.date === card.date && x.course === card.course);
+        const dup = rounds.some((x) => !x.planned && x.date === card.date && x.course === card.course);
         parsed.push({ date: card.date, time: card.time || "", course: card.course, origCourse: card.course, front: "", back: "", tee: card.tee, distCount: 0, statedTotal: null,
           total: S.sum(holes.map((h) => h.par + h.score)), holes, warnings: holes.length === 18 ? [] : [`${holes.length}홀만 읽었습니다`], block: "", dup, pick: !dup,
           st: { comps, photos: card.photos, removed: [], text: "" } });
@@ -1548,7 +1657,7 @@
       app.querySelectorAll("[data-course]").forEach((c) => (c.onchange = () => {
         const r = parsed[c.dataset.course];
         r.course = c.value.trim();
-        r.dup = rounds.some((x) => x.date === r.date && x.course === r.course);
+        r.dup = rounds.some((x) => !x.planned && x.date === r.date && x.course === r.course);
         drawParsed();
       }));
       const bi = $("bImport");
@@ -1568,7 +1677,7 @@
             if (comps.length) objs[i].companions = comps;
             if (paths.length) objs[i].photos = paths;
           }
-          await commit((data) => data.concat(objs).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)), `스마트스코어 등록 ${objs.length}건: ${objs.map((o) => o.date + " " + o.course).join(", ")}`.slice(0, 250));
+          await commit((data) => absorbPlanned(data, objs).concat(objs).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)), `스마트스코어 등록 ${objs.length}건: ${objs.map((o) => o.date + " " + o.course).join(", ")}`.slice(0, 250));
           toast(`${objs.length}개 라운드를 등록했습니다.`);
           parsed = [];
           location.hash = "#/rounds";
@@ -1579,6 +1688,19 @@
         }
       };
     }
+  }
+
+  // 새로 등록하는 라운드와 날짜·골프장이 같은 예정 라운드는 지우고, 예정 라운드에 넣어 둔 거리·핸디캡·코스·티를 빈 칸에 이어받는다
+  function absorbPlanned(data, objs) {
+    const same = (x, o) => x.planned && x.date === o.date && normName(x.course) === normName(o.course);
+    for (const o of objs) {
+      const p = data.find((x) => same(x, o));
+      if (!p) continue;
+      const pm = Object.fromEntries((p.holes || []).map((h) => [h.h, h]));
+      for (const h of o.holes || []) for (const k of ["dist", "hcp", "par"]) if (!isNum(h[k]) && isNum(pm[h.h]?.[k])) h[k] = pm[h.h][k];
+      for (const k of ["front", "back", "tee", "region"]) if (!o[k] && p[k]) o[k] = p[k];
+    }
+    return data.filter((x) => !objs.some((o) => same(x, o)));
   }
 
   // ───────────── 홀·파 분석 ─────────────

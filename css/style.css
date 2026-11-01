@@ -318,3 +318,14 @@ table.hgrid th, table.hgrid td { padding: 4px 1px; }
 table.hgrid select { width: 2.35em; padding: 6px 0; font-size: 15px; text-align: center; text-align-last: center; -webkit-appearance: none; appearance: none; }   /* 동반자 오버 타수 고르기 — 9칸이 휴대폰 폭에 들어가게 화살표 없이 */
 table.hgrid input[list] { width: 2.35em; padding: 6px 0; font-size: 15px; text-align: center; }
 table.hgrid input[list]::-webkit-calendar-picker-indicator { display: none !important; }
+
+/* 홀별 야디지·공략 카드 */
+.hguide { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.hg { background: #fff; border: 1px solid #e6eaf2; border-radius: 12px; padding: 10px 12px; }
+.hg-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.hg-n { font-size: 20px; min-width: 26px; }
+.hg-yd { margin-left: auto; font-size: 15px; }
+.hg-plan, .hg-tip { margin-top: 6px; font-size: 13px; line-height: 1.5; }
+.hg-tip { color: #3b4458; }
+.upcoming { margin-bottom: 10px; border: 1px solid #cfe3ff; background: #f3f8ff; }
+.upcoming hr { border: 0; border-top: 1px solid #dde8f7; margin: 10px 0; }
