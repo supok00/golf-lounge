@@ -9,7 +9,9 @@
   ],
   "tee": "White",
   "memo": "",
-  "status": "요청",
-  "requested": "2026. 11. 1. 13시 36분 "
+  "status": "실패",
+  "requested": "2026. 11. 1. 13시 36분 ",
+  "message": "GitHub 저장소 Settings → Secrets and variables → Actions에 ANTHROPIC_API_KEY가 없습니다",
+  "done": "2026-11-01 13:36"
  }
 ]
