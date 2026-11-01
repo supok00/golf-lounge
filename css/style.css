@@ -328,6 +328,8 @@ table.hgrid input[list]::-webkit-calendar-picker-indicator { display: none !impo
 .hg-plan, .hg-tip { margin-top: 6px; font-size: 13px; line-height: 1.5; }
 .hg-tip { color: #3b4458; }
 .hg-map { margin-top: 6px; font-size: 13px; }
+.hg[data-gh] { cursor: pointer; }
+.hg.cur { border: 2px solid #7aa7f7; background: #f5f9ff; }
 .upcoming { margin-bottom: 10px; border: 1px solid #cfe3ff; background: #f3f8ff; }
 .upcoming hr { border: 0; border-top: 1px solid #dde8f7; margin: 10px 0; }
 

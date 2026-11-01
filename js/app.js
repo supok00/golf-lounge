@@ -178,7 +178,8 @@
   const dday = (d) => Math.round((new Date(d + "T00:00:00") - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00")) / 864e5);
 
   /* 홀별 야디지·공략 카드: 코스 정보(courses.json)의 거리·공략 + 내 클럽 거리로 만든 추정 공략 */
-  function courseGuide(r) {
+  // cur: 입력 화면에서 지금 입력 중인 홀(강조하고, 카드를 누르면 그 홀로 이동)
+  function courseGuide(r, cur) {
     const CH = courseHoles(r);
     const hm = Object.fromEntries((r.holes || []).map((h) => [h.h, h]));
     const rows = Array.from({ length: 18 }, (_, i) => {
@@ -188,7 +189,7 @@
     }).filter((x) => isNum(x.par));
     if (!rows.length) return "";
     const tot = (a, b, k) => S.sum(rows.filter((x) => x.h >= a && x.h <= b && isNum(x[k])).map((x) => x[k]));
-    const card = (x) => `<div class="hg">
+    const card = (x) => `<div class="hg${x.h === cur ? " cur" : ""}"${cur ? ` data-gh="${x.h}" title="${x.h}번 홀 입력하기"` : ""}>
       <div class="hg-top"><b class="hg-n">${x.h}</b><span>파${x.par}</span>${isNum(x.hcp) ? `<span class="muted">HDCP ${x.hcp}</span>` : ""}
         <span class="hg-yd">${isNum(x.dist) ? `<b>${x.dist}</b>m` : ""}</span>${isNum(x.distR) ? `<span class="muted">${CH?.green === "좌" ? "우그린" : "다른 그린"} ${x.distR}m</span>` : ""}</div>
       ${x.plan ? `<div class="hg-plan">🏌️ <span class="muted">내 공략(추정)</span> ${x.plan.text}</div>` : ""}
@@ -645,7 +646,8 @@
         <button class="btn" id="bSave" type="button" ${G.canWrite() ? "" : "disabled"}>GitHub에 저장</button>
         <a class="btn ghost" href="${edit ? "#/round/" + encodeURIComponent(edit.id) : "#/rounds"}">취소</a>
       </div>
-      <p class="legend-note">중간에 저장해도 됩니다. 나중에 「수정」으로 이어서 입력할 수 있습니다.</p>`;
+      <p class="legend-note">중간에 저장해도 됩니다. 나중에 「수정」으로 이어서 입력할 수 있습니다.</p>
+      <div id="guideBox" style="margin-top:18px"></div>`;
 
     const $ = (s) => document.getElementById(s);
     const meta = () => ({ date: $("fDate").value, course: $("fCourse").value.trim(), front: $("fFront").value.trim(), back: $("fBack").value.trim(), tee: $("fTee").value.trim(), region: $("fRegion").value, memo: $("fMemo").value.trim() });
@@ -716,9 +718,22 @@
         ${st.detail ? `<span>퍼트 <b>${st.putts}</b></span><span>GIR <b>${st.gir}</b></span><span>3퍼트 <b>${st.p3}</b></span>` : ""}<span>더블+ <b>${st.dbl}</b></span>
         ${st.checks.length ? `<span class="ng">기록 확인: ${st.checks.join(", ")}번 홀</span>` : ""}`;
     }
-    function drawAll(card = true) { drawNav(); if (card) drawCard(); drawPreview(); }
+    // 화면 아래 홀별 야디지·공략: 지금 홀을 강조하고, 카드를 누르면 그 홀 입력으로 올라간다
+    function drawGuide() {
+      const box = $("guideBox");
+      box.innerHTML = courseGuide({ ...meta(), holes: holesArr() }, cur);
+      bindHoleMaps(meta(), box);
+      box.querySelectorAll("[data-gh]").forEach((el) => (el.onclick = (e) => {
+        if (e.target.closest("[data-map], a")) return;
+        cur = Number(el.dataset.gh);
+        drawAll(true);
+        $("holeNav").scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
+    }
+    function drawAll(card = true) { drawNav(); if (card) drawCard(); drawPreview(); drawGuide(); }
     drawAll();
     ["fDate", "fCourse", "fFront", "fBack", "fTee", "fRegion", "fMemo"].forEach((x) => $(x).addEventListener("input", saveDraft));
+    ["fCourse", "fFront", "fBack", "fTee"].forEach((x) => $(x).addEventListener("change", () => { drawGuide(); drawCard(); }));
     // 골프장을 바꾸면 지역을 그 골프장의 최근 지역으로 맞춘다. 지역을 직접 고른 뒤에는 건드리지 않는다.
     let regionTouched = !!r.region;
     $("fRegion").addEventListener("change", () => (regionTouched = true));
