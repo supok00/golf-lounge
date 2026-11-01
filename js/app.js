@@ -366,12 +366,14 @@
     { label: "3퍼트 수", t: "p3", r: "p3", low: true },
     { label: "1st 퍼트 거리", r: "fp", low: true },
     { label: "벌타", t: "pen", low: true },
-    { label: "위기관리(벌타+더블+ 초과타)", r: "crisis", low: true },
+    { label: "위기관리", sub: "벌타+더블+ 초과타", r: "crisis", low: true },
   ];
   // 설정 표에서 육각형 기준을 목표와 같은 단위로 보여 준다: 비율은 %, 홀당 퍼트는 라운드당
   const PCT = new Set(["fw", "gir", "scr"]);
   const RSCALE = { fw: 100, gir: 100, scr: 100, pph: 18 };
   // 실력 진단 한 줄의 목표. targets에 없으면(거리감·위기관리) 육각형 목표선 점수가 되는 값을 목표로 쓴다
+  // 지표 이름 옆 육각형 영역 표시. 이름에 이미 들어 있으면(위기관리) 겹쳐 보여 표 폭만 넓히므로 뺀다
+  const uniPill = (u) => { const l = u.r && settings.radar[u.r].label; return l && !u.label.includes(l) ? ` <span class="pill">${l}</span>` : ""; };
   function uniGoal(u) {
     if (u.t) return settings.targets[u.t];
     const v = S.valueAt(settings.radar[u.r], settings.radarTarget);
@@ -416,19 +418,19 @@
         ${kpi("방문 골프장", A.courses, "서로 다른 골프장")}
       </div>
       <h2>실력 진단 <span class="muted">최근 5라운드 · 목표 판정과 영역 점수를 한 표로</span></h2>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th class="l">지표</th><th>목표</th><th>최근 5R</th><th>최근 라운드${lastD ? `<br><span class="muted">${dot(lastD).slice(5)}</span>` : ""}</th><th>판정</th><th>점수</th><th>전체 평균</th></tr></thead>
+      <div class="tbl-wrap"><table class="diag">
+        <thead><tr><th class="l">지표</th><th>목표</th><th>최근 5R</th><th>최근 라운드${lastD ? `<br><span class="muted">${dot(lastD).slice(5)}</span>` : ""}</th><th class="c-judge">판정</th><th>점수</th><th class="c-all">전체 평균</th></tr></thead>
         <tbody>${UNI.map((u) => {
           const t = uniGoal(u), m = u.t ? A.metric(u.t) : null;
           const r5 = m ? m.r5 : A.radar.raw[u.r], all = m ? m.all : A.radarAll.raw[u.r];
           const last = m ? m.last : A.radarLast.raw[u.r], okL = meets(last, t);
           const ok = meets(r5, t), sc = u.r ? A.radar.score[u.r] : S.linScore(settings.scores[u.t], r5);
-          return `<tr><td class="l"><b>${u.label}</b>${u.r ? ` <span class="pill">${settings.radar[u.r].label}</span>` : ""}<br><span class="muted">${u.low ? "▼ 낮을수록 좋음" : "▲ 높을수록 좋음"}</span></td>
-            <td><b>${goalText(t)}</b>${u.t ? "" : `<br><span class="muted">육각형 ${settings.radarTarget}점</span>`}</td>${valCell(r5, t, ok, true)}${valCell(last, t, okL)}<td>${judge(ok)}</td>
-            <td class="${isNum(sc) ? (sc >= settings.radarTarget ? "ok" : "ng") : ""}">${isNum(sc) ? `<b>${sc}</b>` : "-"}</td><td class="muted">${fmtT(all, t.fmt)}</td></tr>`;
+          return `<tr><td class="l"><b>${u.label}</b> <span class="muted dir-mark">${u.low ? "▼" : "▲"}</span>${uniPill(u)}<br><span class="muted">${u.sub ? `<span class="dir-sub">${u.sub}</span><br>` : ""}<span class="dir-txt">${u.low ? "▼ 낮을수록 좋음" : "▲ 높을수록 좋음"}</span></span></td>
+            <td><b>${goalText(t)}</b>${u.t ? "" : `<br><span class="muted">육각형 ${settings.radarTarget}점</span>`}</td>${valCell(r5, t, ok, true)}${valCell(last, t, okL)}<td class="c-judge">${judge(ok)}</td>
+            <td class="${isNum(sc) ? (sc >= settings.radarTarget ? "ok" : "ng") : ""}">${isNum(sc) ? `<b>${sc}</b>` : "-"}</td><td class="muted c-all">${fmtT(all, t.fmt)}</td></tr>`;
         }).join("")}</tbody>
       </table></div>
-      <p class="legend-note">판정은 목표값 기준(최근 5R), 「최근 라운드」는 가장 최근 1라운드 값(목표 달성은 초록·미달은 빨강)으로 5R 평균과 비교해 이번 라운드가 나아졌는지 봅니다${lastD && A.fulls[0] && A.dets[0] && A.fulls[0].id !== A.dets[0].id ? ` — 타수 지표는 ${dot(A.fulls[0].date)}, 퍼트·GIR 등은 퍼트를 기록한 ${dot(A.dets[0].date)} 라운드` : ""}. 점수는 설정의 0점·100점 기준으로 바꾼 값입니다(육각형 7영역 + 평균 타수·파 이하·더블보기+·벌타). 거리감·위기관리는 따로 정한 목표가 없어 <b>육각형 목표선(${settings.radarTarget}점)에 해당하는 값</b>을 목표로 판정합니다. 예전에는 두 표(실력 진단·육각형 기준)에 같은 지표가 따로 있었는데 하나로 합쳤습니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 나머지는 퍼트를 기록한 라운드(${A.dets.length}회) 기준.</p>
+      <p class="legend-note">휴대폰에서는 표 폭을 줄이려고 「판정」·「전체 평균」 열을 숨깁니다(최근 5R 값의 초록=달성·빨강=미달이 판정과 같음, ▼ 낮을수록·▲ 높을수록 좋음). 판정은 목표값 기준(최근 5R), 「최근 라운드」는 가장 최근 1라운드 값(목표 달성은 초록·미달은 빨강)으로 5R 평균과 비교해 이번 라운드가 나아졌는지 봅니다${lastD && A.fulls[0] && A.dets[0] && A.fulls[0].id !== A.dets[0].id ? ` — 타수 지표는 ${dot(A.fulls[0].date)}, 퍼트·GIR 등은 퍼트를 기록한 ${dot(A.dets[0].date)} 라운드` : ""}. 점수는 설정의 0점·100점 기준으로 바꾼 값입니다(육각형 7영역 + 평균 타수·파 이하·더블보기+·벌타). 거리감·위기관리는 따로 정한 목표가 없어 <b>육각형 목표선(${settings.radarTarget}점)에 해당하는 값</b>을 목표로 판정합니다. 예전에는 두 표(실력 진단·육각형 기준)에 같은 지표가 따로 있었는데 하나로 합쳤습니다. 타수 지표는 18홀 라운드(${A.fulls.length}회), 나머지는 퍼트를 기록한 라운드(${A.dets.length}회) 기준.</p>
       <div class="grid g2" style="margin-top:12px">
         <div class="card"><h3 class="mt0">7영역 육각형 <span class="muted">최근 상세 5R vs 전체</span></h3><div class="chart-box tall"><canvas id="cRadar"></canvas></div>
           <p class="legend-note">초록: 최근 5라운드 · 파랑: 전체 평균 · 주황 점선: 목표선(${settings.radarTarget}점).</p></div>
@@ -1978,7 +1980,7 @@
           const rIn = (w, v) => `<input data-${w}="${u.r}" type="number" step="${unit ? 1 : 0.1}" value="${+(v * k).toFixed(2)}" style="width:70px">${unit ? " %" : ""}`;
           const sc = !x && settings.scores[u.t];
           const sIn = (w, v) => `<input data-${w}="${u.t}" type="number" step="0.5" value="${v}" style="width:70px">`;
-          return `<tr><td class="l"><b>${u.label}</b>${x ? ` <span class="pill">${x.label}</span>` : ""}<br><span class="muted">${u.low ? "낮을수록 좋음" : "높을수록 좋음"}${u.r === "pph" ? " · 라운드(18홀)당" : ""}</span></td><td>${tIn}</td><td>${x ? rIn("rz", x.zero) : sc ? sIn("sz", sc.zero) : "-"}</td><td>${x ? rIn("rf", x.full) : sc ? sIn("sf", sc.full) : "-"}</td></tr>`;
+          return `<tr><td class="l"><b>${u.label}</b>${uniPill(u)}<br><span class="muted">${u.sub ? u.sub + " · " : ""}${u.low ? "낮을수록 좋음" : "높을수록 좋음"}${u.r === "pph" ? " · 라운드(18홀)당" : ""}</span></td><td>${tIn}</td><td>${x ? rIn("rz", x.zero) : sc ? sIn("sz", sc.zero) : "-"}</td><td>${x ? rIn("rf", x.full) : sc ? sIn("sf", sc.full) : "-"}</td></tr>`;
         }).join("")}
         <tr><td class="l"><b>육각형 목표선</b><br><span class="muted">점수 기준선</span></td><td colspan="3"><input id="rTarget" type="number" value="${settings.radarTarget}" style="width:70px"> 점</td></tr></tbody></table></div>
       <p class="legend-note">평균 타수·파 이하 홀·더블보기+·벌타의 0점·100점은 실력 진단 표의 점수에만 쓰이고 육각형 모양은 그대로입니다. 거리감·위기관리의 목표는 육각형 목표선 점수가 되는 값으로 자동 계산합니다(100점 값이나 목표선을 바꾸면 같이 바뀜). 기준값은 아마추어 핸디캡별 통계 경향을 참고한 가정값입니다(100점 ≈ 싱글~10 핸디캡, 0점 ≈ 초보). 비율은 %로, 퍼트는 라운드당으로 입력합니다(저장은 0~1·홀당 형식으로 바꿔서 함).</p>
