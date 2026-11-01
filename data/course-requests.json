@@ -13,5 +13,18 @@
   "requested": "2026. 11. 1. 13시 36분 ",
   "message": "GitHub 저장소 Settings → Secrets and variables → Actions에 ANTHROPIC_API_KEY가 없습니다",
   "done": "2026-11-01 13:36"
+ },
+ {
+  "id": "qmvxcqgse",
+  "name": "비에이비스타 CC",
+  "url": "https://www.bavista.co.kr/Public/Main",
+  "courses": [
+   "보나",
+   "호박"
+  ],
+  "tee": "White",
+  "memo": "",
+  "status": "요청",
+  "requested": "2026. 11. 1. 13시 50분 "
  }
 ]
