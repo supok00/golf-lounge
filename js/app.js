@@ -2018,7 +2018,7 @@
       <h2>버전 <span class="muted">v${APP_VERSION}</span></h2>
       <div class="card">${APP_CHANGES.map((c) => `<h3 class="mt0">v${c.v} <span class="muted">${c.date}</span></h3><ul>${c.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")}
         <p class="legend-note">이전 버전 화면 보기(읽기 전용): ${APP_CHANGES.filter((c) => c.v !== APP_VERSION).map((c) => `<a href="v${c.v}/" target="_blank" rel="noopener">v${c.v}</a>`).join(" · ")} — 주소 뒤에 <code>/v0.9</code>처럼 붙여도 됩니다.</p>
-        <p class="legend-note">2026.10.25 정식판을 1.0으로 정했습니다(이전 개발 과정은 0.1~0.9). 2026.10.26 중복 정리판이 1.1입니다. 기능을 고쳐도 따로 정하기 전까지 버전은 그대로 두고, 배포 번호(${typeof APP_BUILD === "string" ? APP_BUILD : "-"})만 바뀝니다. 새 버전이 나오면 화면 아래에 「새 버전이 있습니다 — 지금 적용」이 뜹니다.</p></div>
+        <p class="legend-note">2026.10.25 정식판을 1.0으로 정했습니다(이전 개발 과정은 0.1~0.9). 2026.10.26 중복 정리판이 1.1, 2026.11.01 퍼트 분석·사진/동영상·라운드 전 등록판이 1.2입니다. 기능을 고쳐도 따로 정하기 전까지 버전은 그대로 두고, 배포 번호(${typeof APP_BUILD === "string" ? APP_BUILD : "-"})만 바뀝니다. 새 버전이 나오면 앱을 열거나 다시 돌아올 때 자동으로 적용됩니다(라운드 입력·설정 화면에서는 「새 버전이 있습니다 — 지금 적용」 줄로 알려 줌). 휴대폰 저장판(<a href="https://supok00.github.io/golf-lounge-hp/" target="_blank" rel="noopener">golf-lounge-hp</a>)도 같은 버전입니다.</p></div>
 
       <h2>백업</h2>
       ${native ? `<p class="muted">앱에서는 파일 내려받기가 안 됩니다. 백업은 웹 페이지에서 하거나 GitHub 저장소의 data/rounds.json을 쓰세요.</p>` : `<div class="row"><button class="btn ghost" id="bExport" type="button">rounds.json 내려받기</button></div>`}
@@ -2134,8 +2134,14 @@
     // 새 버전 알림: 새 서비스 워커가 설치되어 화면을 넘겨받으면(controllerchange) 적용 버튼을 띄운다.
     // 처음 설치할 때는 이전 버전이 없으므로 띄우지 않는다.
     let hadController = !!navigator.serviceWorker.controller;
+    // 새 버전은 자동으로 적용한다: 입력·설정 화면이나 보기 창이 아니면 바로 다시 읽고,
+    // 입력 중이면(새로 고른 사진·동영상은 임시 저장이 안 될 수 있으므로) 알림 줄만 띄워 사용자가 고르게 한다.
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (hadController) showUpdateBar();
+      if (hadController) {
+        const editing = /^#\/(register|input|edit|settings|import)/.test(location.hash) || document.querySelector("#bCompSave, #bImport, .viewer");
+        if (editing) showUpdateBar();
+        else location.reload();
+      }
       hadController = true;
     });
     navigator.serviceWorker.register("sw.js").then((reg) => {
