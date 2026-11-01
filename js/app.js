@@ -184,7 +184,7 @@
     const rows = Array.from({ length: 18 }, (_, i) => {
       const c = CH?.holes.find((x) => x.h === i + 1) || {}, h = hm[i + 1] || {};
       const par = h.par ?? c.par, dist = h.dist ?? c.dist;
-      return { h: i + 1, par, hcp: h.hcp ?? c.hcp, dist, distR: c.distR, tip: c.tip, plan: Clubs.plan(par, dist, Clubs.bag(settings)) };
+      return { h: i + 1, par, hcp: h.hcp ?? c.hcp, dist, distR: c.distR, tip: c.tip, map: c.map, plan: Clubs.plan(par, dist, Clubs.bag(settings)) };
     }).filter((x) => isNum(x.par));
     if (!rows.length) return "";
     const tot = (a, b, k) => S.sum(rows.filter((x) => x.h >= a && x.h <= b && isNum(x[k])).map((x) => x[k]));
@@ -192,10 +192,16 @@
       <div class="hg-top"><b class="hg-n">${x.h}</b><span>파${x.par}</span>${isNum(x.hcp) ? `<span class="muted">HDCP ${x.hcp}</span>` : ""}
         <span class="hg-yd">${isNum(x.dist) ? `<b>${x.dist}</b>m` : ""}</span>${isNum(x.distR) ? `<span class="muted">${CH?.green === "좌" ? "우그린" : "다른 그린"} ${x.distR}m</span>` : ""}</div>
       ${x.plan ? `<div class="hg-plan">🏌️ <span class="muted">내 공략(추정)</span> ${x.plan.text}</div>` : ""}
-      ${x.tip ? `<div class="hg-tip">📍 ${esc(x.tip)}</div>` : ""}</div>`;
+      ${x.tip ? `<div class="hg-tip">📍 ${esc(x.tip)}</div>` : ""}
+      ${x.map ? `<button type="button" class="link hg-map" data-map="${x.h}">🗺 홀 그림</button>` : ""}</div>`;
     return `<h3>홀별 야디지 · 공략 <span class="muted">${CH ? `${esc(CH.club.name)} ${esc(CH.tee)} 티${CH.green ? ` · ${CH.green}그린 기준` : ""}` : "입력한 거리 기준"} · OUT ${tot(1, 9, "dist")}m · IN ${tot(10, 18, "dist")}m</span></h3>
       <div class="hguide">${rows.map(card).join("")}</div>
-      <p class="legend-note">「내 공략」은 <a href="#/settings">내 클럽 거리</a>로 계산한 추정입니다(티샷은 드라이버 평균 거리 가정${Clubs.isDefault(settings) ? ", 지금은 예시 클럽 거리" : ""}). 「📍」는 골프장 홈페이지 코스 안내를 요약한 공략입니다. 거리는 모두 미터(홈페이지 야드 × 0.9144)입니다.${CH?.club.url ? ` 출처: <a href="${esc(CH.club.url)}" target="_blank" rel="noopener">${esc(CH.club.name)} 홈페이지</a> (${esc(CH.club.updated || "")})` : ""}</p>`;
+      <p class="legend-note">「내 공략」은 <a href="#/settings">내 클럽 거리</a>로 계산한 추정입니다(티샷은 드라이버 평균 거리 가정${Clubs.isDefault(settings) ? ", 지금은 예시 클럽 거리" : ""}). 「📍」는 골프장 홈페이지 코스 안내를 요약한 공략이고, 「🗺 홀 그림」은 홈페이지 홀맵(해저드·벙커까지 거리, 고저차 포함 · 그림 속 숫자는 야드)입니다. 거리는 모두 미터(홈페이지 야드 × 0.9144)입니다.${CH?.club.url ? ` 출처: <a href="${esc(CH.club.url)}" target="_blank" rel="noopener">${esc(CH.club.name)} 홈페이지</a> (${esc(CH.club.updated || "")})` : ""}</p>`;
+  }
+
+  function bindHoleMaps(r, root = app) {
+    const maps = (courseHoles(r)?.holes || []).filter((h) => h.map);
+    root.querySelectorAll("[data-map]").forEach((b) => (b.onclick = () => openViewer(maps.map((h) => h.map), Math.max(0, maps.findIndex((h) => h.h === Number(b.dataset.map))))));
   }
 
   // ───────────── 공통 필터 (모든 분석 화면에 같은 조건) ─────────────
@@ -497,6 +503,7 @@
       ${courseGuide(r) || `<p class="muted">Par·거리를 입력하면 홀별 공략이 나옵니다.</p>`}
       <div id="delBox"></div>
       <p><a href="#/rounds">← 목록으로</a></p>`;
+    bindHoleMaps(r);
     document.getElementById("bDel").onclick = () => {
       document.getElementById("delBox").innerHTML = `<div class="notice">이 예정 라운드를 삭제할까요? <button class="btn danger" id="bDel2" type="button">삭제 확인</button></div>`;
       document.getElementById("bDel2").onclick = async () => {
@@ -671,11 +678,12 @@
         ${(() => {
           const p = Clubs.plan(h.par, h.dist, Clubs.bag(settings));
           const c = courseHoles(meta())?.holes.find((x) => x.h === cur);
-          const tip = c ? `<div class="plan">📍 <b>코스 공략</b> <span class="muted">${isNum(c.dist) ? `${c.dist}m${isNum(c.distR) ? ` (다른 그린 ${c.distR}m)` : ""}` : ""}</span> ${esc(c.tip || "")}</div>` : "";
+          const tip = c ? `<div class="plan">📍 <b>코스 공략</b> <span class="muted">${isNum(c.dist) ? `${c.dist}m${isNum(c.distR) ? ` (다른 그린 ${c.distR}m)` : ""}` : ""}</span> ${esc(c.tip || "")}${c.map ? ` <button type="button" class="link" data-map="${cur}">🗺 홀 그림</button>` : ""}</div>` : "";
           if (p) return `<div class="plan">🏌️ <b>공략 가이드</b> <span class="muted">(추정)</span> ${p.text}</div>` + tip;
           return (isNum(h.par) ? `<div class="plan muted">거리를 넣으면 내 클럽 거리로 공략 가이드가 나옵니다</div>` : "") + tip;
         })()}
         ${FIELDS.map(([g, fs]) => `<div class="fgroup"><div class="fg-title">${g}</div><div class="form">${fs.map(field).join("")}</div></div>`).join("")}`;
+      bindHoleMaps(meta(), $("holeCard"));
       $("holeCard").querySelectorAll("[data-k]").forEach((el) => {
         el.addEventListener("change", () => {
           const k = el.dataset.k;
@@ -1244,6 +1252,7 @@
       });
     }
     app.querySelectorAll(".photos.view [data-pv]").forEach((b) => (b.onclick = () => openViewer(r.photos.map(mediaItem), Number(b.dataset.pv))));
+    bindHoleMaps(r);
     document.getElementById("bComp").onclick = () => {
       const box = document.getElementById("compBox");
       const st = newEditState(r);
