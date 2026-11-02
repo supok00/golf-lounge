@@ -33,8 +33,8 @@
   "fp": {
    "label": "거리감",
    "metric": "1st 퍼트 거리(m)",
-   "zero": 14,
-   "full": 6
+   "zero": 15,
+   "full": 5
   },
   "crisis": {
    "label": "위기관리",
@@ -60,6 +60,10 @@
   "pen": {
    "zero": 8,
    "full": 1
+  },
+  "sandp": {
+   "zero": 0,
+   "full": 0.5
   }
  },
  "targets": {
@@ -108,6 +112,12 @@
   "scrp": {
    "label": "스크램블",
    "v": 0.4,
+   "low": false,
+   "fmt": "%"
+  },
+  "sandp": {
+   "label": "샌드세이브",
+   "v": 0.3,
    "low": false,
    "fmt": "%"
   },
