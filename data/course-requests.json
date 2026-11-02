@@ -34,7 +34,7 @@
  {
   "id": "qmvyzp6jv",
   "name": "스톤비치cc",
-  "url": "https://stonebeachcc.com/",
+  "url": "https://stonebeach-cc.com/",
   "courses": [
    "스톤",
    "비치"
@@ -42,7 +42,10 @@
   "tee": "White",
   "date": "2026-11-28",
   "memo": "아파트 멤버",
-  "status": "요청",
-  "requested": "2026-11-02 17:21"
+  "status": "완료",
+  "requested": "2026-11-02 17:21",
+  "club": "스톤비치CC",
+  "done": "2026-11-02 17:26",
+  "message": "스톤코스 9홀, 비치코스 9홀 등록, 홀 그림 0장 · 2026-11-28 예정 라운드 등록 · 확인 필요: 홈페이지(stonebeach-cc.com) 직접 접속 불가 — 거리·Par는 검색에 나온 공식 사이트 스코어 표 기준 / 핸디캡 없음 / 홀 그림 없음 / 공략은 스톤 4번, 비치 6·7번만"
  }
 ]
