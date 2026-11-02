@@ -8,7 +8,7 @@ usage (저장소 루트에서, pip install requests pillow):
   python3 tools/course_fetch.py list                       # 대기 중인 요청
   python3 tools/course_fetch.py page <url>                 # 페이지 글·표·링크·그림 주소
   python3 tools/course_fetch.py image <url> <out.jpg>      # 그림을 읽기 좋은 크기로 내려받기
-  python3 tools/course_fetch.py merge <sub.json> <요청 id> # 검증 → 병합 → 홀 그림 저장 → 요청 완료
+  python3 tools/course_fetch.py merge <sub.json> <요청 id> # 검증 → 병합 → 홀 그림 저장 → (날짜가 있으면) 예정 라운드 → 요청 완료
   python3 tools/course_fetch.py fail <요청 id> <이유>      # 찾을 수 없을 때
 
 sub.json 형식(merge): {"name", "alias":[], "region", "courses":[{"name", "tee", "tee_label", "green":"좌|우|", "note",
@@ -31,6 +31,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 REQUESTS = ROOT / "data/course-requests.json"
+ROUNDS = ROOT / "data/rounds.json"
 COURSES = ROOT / "data/courses.json"
 UA = {"User-Agent": "Mozilla/5.0 (golf-lounge course fetch; personal use)"}
 KST = datetime.timezone(datetime.timedelta(hours=9))
@@ -184,6 +185,32 @@ def merge(sub, req):
     return saved, failed
 
 
+def add_planned(sub, req):
+    """요청에 라운드 날짜가 있으면 그 날짜의 예정 라운드를 만든다(앱의 「골프장 정보 불러오기」와 같은 Par·핸디캡·거리).
+    코스가 두 개면 첫 번째가 전반(1~9), 두 번째가 후반(10~18). 18홀 코스 하나면 그 코스 1~18. 같은 날짜·골프장 라운드가 있으면 건너뜀."""
+    date = req.get("date")
+    if not date:
+        return ""
+    rounds = load(ROUNDS, [])
+    if any(r.get("date") == date and norm(r.get("course")) in (norm(sub["name"]), norm(req["name"])) for r in rounds):
+        return f"{date} 라운드가 이미 있어 예정 라운드는 만들지 않음"
+    db = load(COURSES, [])
+    club = next(c for c in db if norm(c["name"]) == norm(sub["name"]))
+    names = req["courses"][:2] or [sub["courses"][0]["name"]]
+    front, back = names[0], names[-1]
+    def tee_holes(name):
+        cs = next(x for x in club["courses"] if norm(x["name"]) == norm(name))
+        t = cs["tees"].get(req["tee"]) or next(iter(cs["tees"].values()))
+        return t["holes"]
+    fh = tee_holes(front)
+    src = fh if len(fh) == 18 else fh[:9] + [dict(h, h=h["h"] + 9) for h in tee_holes(back)[:9]]
+    holes = [{k: h[k] for k in ("h", "par", "dist", "hcp") if h.get(k) is not None} for h in src]
+    rounds.append({"id": f"r{date.replace('-', '')}-plan", "date": date, "course": club["name"], "front": front, "back": back,
+                   "tee": req["tee"], "region": club.get("region", ""), "memo": "", "planned": True, "holes": holes})
+    save(ROUNDS, rounds)
+    return f"{date} 예정 라운드 등록"
+
+
 def find_req(reqs, rid):
     r = next((x for x in reqs if x.get("id") == rid), None)
     if not r:
@@ -196,7 +223,7 @@ def main(argv):
     if cmd == "list":
         todo = [r for r in load(REQUESTS, []) if r.get("status") == "요청"]
         for r in todo:
-            print(f"{r['id']}  {r['name']}  {r['url']}  코스 {', '.join(r['courses'])}  티 {r['tee']}  {r.get('memo', '')}")
+            print(f"{r['id']}  {r['name']}  {r['url']}  코스 {', '.join(r['courses'])}  티 {r['tee']}  날짜 {r.get('date') or '-'}  {r.get('memo', '')}")
         print(f"대기 {len(todo)}건")
     elif cmd == "page":
         print(fetch_page(argv[2]))
@@ -212,9 +239,10 @@ def main(argv):
         if errs:
             raise SystemExit("검증 실패:\n" + "\n".join(errs))
         saved, failed = merge(sub, req)
+        plan = add_planned(sub, req)
         warn = list(sub.get("warnings", [])) + failed
         req.update(status="완료", club=sub["name"], done=now(),
-                   message=f"{', '.join(c['name'] + '코스 ' + str(len(c['holes'])) + '홀' for c in sub['courses'])} 등록, 홀 그림 {saved}장" + (f" · 확인 필요: {' / '.join(warn[:4])}" if warn else ""))
+                   message=f"{', '.join(c['name'] + '코스 ' + str(len(c['holes'])) + '홀' for c in sub['courses'])} 등록, 홀 그림 {saved}장" + (f" · {plan}" if plan else "") + (f" · 확인 필요: {' / '.join(warn[:4])}" if warn else ""))
         save(REQUESTS, reqs)
         print(req["message"])
     elif cmd == "fail":
