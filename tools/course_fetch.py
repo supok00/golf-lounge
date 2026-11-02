@@ -101,7 +101,14 @@ def fetch_page(url):
 
 
 def load_image(url, max_side):
-    im = Image.open(io.BytesIO(http_get(url).content)).convert("RGB")
+    im = Image.open(io.BytesIO(http_get(url).content))
+    if im.mode in ("RGBA", "LA", "P"):
+        # 투명 PNG 홀 그림(스톤비치)을 그냥 RGB로 바꾸면 배경이 검게 나와 흰 바탕에 얹는다
+        im = im.convert("RGBA")
+        bg = Image.new("RGB", im.size, "white")
+        bg.paste(im, mask=im.split()[3])
+        im = bg
+    im = im.convert("RGB")
     w, h = im.size
     k = min(1.0, max_side / max(w, h))
     return (im.resize((round(w * k), round(h * k))) if k < 1 else im), (w, h)
