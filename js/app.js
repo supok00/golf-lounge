@@ -2259,7 +2259,7 @@
     const me = typeof G.me === "function" ? G.me() : null;
     return `<h2>내 계정</h2>
       <div class="card"><p class="mt0">${me ? `<b>${esc(me.nickname || "")}</b> (${esc(me.email || "")})로 로그인했습니다.` : "로그인하지 않았습니다."}</p>
-        <div class="row">${me && me.role === "admin" ? `<a class="btn" href="admin.html">관리자 화면</a>` : ""}${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div></div>`;
+        <div class="row">${me ? `<a class="btn" href="friends.html">친구·순위</a>` : ""}${me && me.role === "admin" ? `<a class="btn ghost" href="admin.html">관리자 화면</a>` : ""}${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div></div>`;
   }
   function settingsView() {
     const c = G.cfg ? G.cfg() : {};
