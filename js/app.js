@@ -17,7 +17,7 @@
   let charts = [];
   let courseDB = [];   // data/courses.json: 골프장 홈페이지에서 옮긴 코스별 Par·핸디캡·거리·공략(라운드 전 등록용)
   let courseReqs = []; // data/course-requests.json: 앱에서 보낸 「골프장 정보 요청」 대기열 — Claude Code가 tools/course_fetch.py로 처리(API 비용 없음)
-  const COURSES_PATH = "data/courses.json", REQS_PATH = "data/course-requests.json";
+  const COURSES_PATH = G.COURSES, REQS_PATH = G.COURSE_REQS;
 
   // ───────────── 유틸 ─────────────
   const isNum = S.isNum;
@@ -192,7 +192,7 @@
     const el = document.getElementById("status");
     if (!el) return;
     const src = { github: "GitHub 최신본", pages: "배포본(최대 몇 분 늦을 수 있음)", cache: "이 기기 캐시(오프라인)" }[source] || "-";
-    el.innerHTML = `${G.pending() ? `<a class="ng" href="#/settings" style="color:#d9475a;font-weight:700">⚠ 동기화 필요</a>` : ""}<span>데이터: ${src}${loadedAt ? " · " + loadedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+    el.innerHTML = `${G.pending?.() ? `<a class="ng" href="#/settings" style="color:#d9475a;font-weight:700">⚠ 동기화 필요</a>` : ""}<span>데이터: ${src}${loadedAt ? " · " + loadedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
       <span class="${G.canWrite() ? "ok" : "muted"}">${G.canWrite() ? "● 저장 가능" : "○ 읽기 전용"}</span>
       <button class="link" id="bReload" type="button">새로고침</button>
       <a class="ver" href="#/settings" title="버전 · 변경 내역">v${APP_VERSION}</a>`;
@@ -266,7 +266,7 @@
       <p class="legend-note">「내 공략」은 <a href="#/settings?sec=clubs">내 클럽 거리</a>로 계산한 추정입니다(티샷은 드라이버 평균 거리 가정${Clubs.isDefault(settings) ? ", 지금은 예시 클럽 거리" : ""}). 「📍」는 골프장 홈페이지 코스 안내를 요약한 공략이고, 「🗺 홀 그림」은 홈페이지 홀맵(해저드·벙커까지 거리, 고저차 포함 · 그림 속 숫자는 야드)입니다. 거리는 모두 미터(홈페이지 야드 × 0.9144)입니다.${CH?.club.url ? ` 출처: <a href="${esc(CH.club.url)}" target="_blank" rel="noopener">${esc(CH.club.name)} 홈페이지</a> (${esc(CH.club.updated || "")})` : ""}</p>`;
   }
 
-  const courseAsset = (path) => G.rawUrl(path);
+  const courseAsset = (path) => G.mediaUrl(path);
   function bindHoleMaps(r, root = app) {
     const maps = (courseHoles(r)?.holes || []).filter((h) => h.map);
     root.querySelectorAll("[data-map]").forEach((b) => (b.onclick = () => openViewer(maps.map((h) => courseAsset(h.map)), Math.max(0, maps.findIndex((h) => h.h === Number(b.dataset.map))))));
@@ -514,10 +514,10 @@
 
   // Fork한 사이트는 자기 폴더(data/users/계정)에 저장해 빈 기록으로 시작한다. 처음 쓰는 분께 순서를 안내한다.
   function welcomeBox() {
-    if (G.IS_ORIGIN || rounds.length) return "";
+    if (G.where().isOwner || rounds.length) return "";
     return `<div class="card welcome">
       <h3 class="mt0">👋 내 골프 라운지에 오신 것을 환영합니다</h3>
-      <p>아직 기록이 없습니다. 이 사이트의 기록은 <b>${esc(G.PRIMARY.owner)}/${esc(G.PRIMARY.repo)}</b> 저장소의 <code>${esc(G.ROUNDS)}</code>에 저장됩니다.</p>
+      <p>아직 기록이 없습니다. 이 사이트의 기록은 <b>${esc(G.where().label)}</b> 저장소의 <code>${esc(G.where().file)}</code>에 저장됩니다.</p>
       <ol>
         <li>${G.canWrite() ? "✅ GitHub 토큰 준비 완료" : `<a href="#/settings">설정</a>에서 <b>내 저장소용 GitHub 토큰</b>을 넣어 주세요`}</li>
         <li><a href="#/import">붙여넣기 등록</a>(스마트스코어) 또는 <a href="#/input">라운드 입력</a>으로 첫 라운드를 남겨 보세요.</li>
@@ -1155,9 +1155,9 @@
   const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i;
   const isVideo = (p) => (typeof p === "string" ? VIDEO_EXT.test(p) : !!p.video || VIDEO_EXT.test(p.path || ""));
   // 저장한 동영상은 배포본(올바른 동영상 형식으로 내려 줌)을 먼저, 아직 배포 전이면 저장소 원본으로
-  const videoSrcs = (path) => [path, G.rawUrl(path)];
+  const videoSrcs = (path) => [path, G.mediaUrl(path)];
   // 보기 창에 넘길 항목: 사진은 주소 문자열, 동영상은 {video, srcs}
-  const mediaItem = (p) => (isVideo(p) ? { video: true, srcs: p.path || typeof p === "string" ? videoSrcs(p.path || p) : [p.dataUrl] } : p.dataUrl || G.rawUrl(p.path || p));
+  const mediaItem = (p) => (isVideo(p) ? { video: true, srcs: p.path || typeof p === "string" ? videoSrcs(p.path || p) : [p.dataUrl] } : p.dataUrl || G.mediaUrl(p.path || p));
   async function readVideo(file) {
     if (file.size > VIDEO_MAX) throw new Error(`동영상이 ${Math.round(file.size / 1048576)}MB라 올릴 수 없습니다(한 개 50MB까지). 휴대폰 갤러리에서 앞뒤를 잘라 짧게 만들어 주세요.`);
     const b64 = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1]); fr.onerror = () => no(new Error("동영상을 읽지 못했습니다.")); fr.readAsDataURL(file); });
@@ -1168,7 +1168,7 @@
   const readMedia = (f) => (f.type.startsWith("video/") || VIDEO_EXT.test(f.name) ? readVideo(f) : Companions.shrink(f));
   // 작은 칸 미리보기: 동영상은 첫 장면 + ▶ 표시
   function thumb(p, i, attr = "") {
-    if (!isVideo(p)) return `<img src="${p.dataUrl || G.rawUrl(p.path || p)}" alt="사진 ${i + 1}" loading="lazy" ${attr}>`;
+    if (!isVideo(p)) return `<img src="${p.dataUrl || G.mediaUrl(p.path || p)}" alt="사진 ${i + 1}" loading="lazy" ${attr}>`;
     const srcs = p.dataUrl ? [p.dataUrl] : videoSrcs(p.path || p);
     return `<video preload="metadata" muted playsinline ${attr}>${srcs.map((u) => `<source src="${u}${u.startsWith("blob:") ? "" : "#t=0.1"}">`).join("")}</video><span class="ph-play" aria-hidden="true">▶</span>`;
   }
@@ -1414,7 +1414,7 @@
     for (const [i, p] of st.photos.entries()) {
       if (p.path) continue;
       if (onProgress) onProgress(++k, total, p.video);
-      const path = `${G.DATA_DIR}/photos/${id}-${Date.now().toString(36)}${i}.${p.video ? p.ext : "jpg"}`;
+      const path = G.mediaPath(`${id}-${Date.now().toString(36)}${i}.${p.video ? p.ext : "jpg"}`);
       errs.push(...(await G.putFile(path, p.b64, `${p.video ? "동영상" : "사진"} 추가: ${what}`)));
       p.path = path;
       delete p.b64;
@@ -2240,11 +2240,11 @@
   // ───────────── 사용자 가이드 ─────────────
   const GUIDE = {
     app: "My Golf Lounge",
-    url: `${G.PRIMARY.owner}.github.io/${G.PRIMARY.repo}`,
+    url: G.where().siteUrl,
     features: { filter: true, import: true, insights: true, fork: true },
-    repos: [G.PRIMARY.repo, ...G.MIRRORS.map((m) => m.repo)],
-    origin: `${G.ORIGIN.owner}/${G.ORIGIN.repo}`,
-    isOrigin: G.IS_ORIGIN,
+    repos: G.where().repos,
+    origin: G.where().origin,
+    isOrigin: G.where().isOwner,
   };
   function guideView() {
     // 가이드 본문의 메뉴 이름 중 바뀐 것만 맨 위에 알려 준다(2026.10.26 메뉴 정리)
@@ -2254,8 +2254,14 @@
   }
 
   // ───────────── 설정·데이터 ─────────────
+  // 서버판(api.js, KIND "server")의 「내 계정」 자리. GitHub판에서는 쓰지 않는다.
+  function accountHtml() {
+    const me = typeof G.me === "function" ? G.me() : null;
+    return `<h2>내 계정</h2>
+      <div class="card"><p class="mt0">${me ? `<b>${esc(me.nickname || me.email || "")}</b>로 로그인했습니다.` : "로그인하지 않았습니다."}</p></div>`;
+  }
   function settingsView() {
-    const c = G.cfg();
+    const c = G.cfg ? G.cfg() : {};
     const tg = settings.targets, rd = settings.radar;
     app.innerHTML = `
       ${native ? "" : `<h2>휴대폰에 앱으로 설치</h2>
@@ -2264,6 +2270,7 @@
         <p class="legend-note">설치하면 홈 화면 아이콘으로 전체 화면에서 열리고, 인터넷이 없어도 마지막으로 받은 기록을 볼 수 있습니다. APK와 달리 Play 프로텍트 경고가 없습니다.</p>
       </div>`}
 
+      ${G.KIND !== "server" ? `
       <h2>GitHub 연결</h2>
       <div class="card">
         <p class="muted mt0">데이터 저장 위치: <b>${esc(c.owner)}/${esc(c.repo)}</b> · ${esc(c.path)} — 저장할 때 <b>${c.mirrors.map((m) => esc(m.owner + "/" + m.repo)).join(", ")}</b>에도 같은 변경을 적용합니다.</p>
@@ -2280,14 +2287,14 @@
           · 만료 기간은 짧게(예: 90일) 두고 만료되면 다시 만드세요.<br>
           토큰은 이 브라우저에만 저장되고 GitHub 외 다른 곳으로 보내지 않습니다. 공용 PC에서는 입력하지 말고, 쓰고 나면 「토큰 삭제」를 누르세요. 보기만 하는 기기에는 토큰이 필요 없습니다.
         </div>
-      </div>
+      </div>` : accountHtml()}
 
-      ${G.MIRRORS.length ? `<h2>동기화</h2>
+      ${G.hasMirrors?.() ? `<h2>동기화</h2>
       <div class="card">
         <div id="syncBox" class="muted">확인 중…</div>
         <div class="row" style="margin-top:10px">
           <button class="btn ghost" id="bSyncCheck" type="button">다시 확인</button>
-          ${[G.PRIMARY, ...G.MIRRORS].map((r) => `<button class="btn ghost" data-sync="${esc(r.repo)}" type="button" ${G.canWrite() ? "" : "disabled"}>${esc(r.repo)} 기준으로 맞추기</button>`).join("")}
+          ${G.mirrorRepos().map((repo) => `<button class="btn ghost" data-sync="${esc(repo)}" type="button" ${G.canWrite() ? "" : "disabled"}>${esc(repo)} 기준으로 맞추기</button>`).join("")}
         </div>
         <p class="legend-note">평소에는 저장할 때마다 자동으로 모든 저장소에 같이 반영됩니다. 네트워크 오류 등으로 어긋났을 때만 맞추기를 누르세요. 맞추기는 한쪽 내용으로 다른 쪽을 덮어씁니다.</p>
       </div>` : ""}
@@ -2332,15 +2339,15 @@
       <h2>백업</h2>
       ${native ? `<p class="muted">앱에서는 파일 내려받기가 안 됩니다. 백업은 웹 페이지에서 하거나 GitHub 저장소의 data/rounds.json을 쓰세요.</p>` : `<div class="row"><button class="btn ghost" id="bExport" type="button">rounds.json 내려받기</button></div>`}
       <p class="muted">현재 ${rounds.length}라운드 · GitHub 저장소의 커밋 기록에 모든 변경 이력이 남습니다.</p>
-      ${G.IS_ORIGIN ? "" : `<h2>데이터 초기화</h2>
+      ${G.where().isOwner ? "" : `<h2>데이터 초기화</h2>
       <div class="card">
-        <p class="mt0">내 저장소(${esc(G.PRIMARY.owner)}/${esc(G.PRIMARY.repo)})의 라운드를 모두 지우고 기준값을 기본값으로 되돌립니다. 지운 기록도 GitHub 커밋 기록에서 되살릴 수 있습니다.</p>
+        <p class="mt0">내 저장소(${esc(G.where().label)})의 라운드를 모두 지우고 기준값을 기본값으로 되돌립니다. 지운 기록도 GitHub 커밋 기록에서 되살릴 수 있습니다.</p>
         <button class="btn danger" id="bWipe" type="button" ${G.canWrite() ? "" : "disabled"}>모든 기록 지우고 새로 시작</button>
         <div id="wipeBox" style="margin-top:8px"></div>
       </div>`}`;
     const $ = (s) => document.getElementById(s);
     if ($("bInstall")) $("bInstall").onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; settingsView(); };
-    $("bTok").onclick = async () => {
+    if ($("bTok")) $("bTok").onclick = async () => {
       const v = $("tok").value.trim();
       if (!v) return toast("토큰을 입력하세요.");
       G.setCfg({ token: v });
@@ -2365,15 +2372,15 @@
     };
     const doSync = async (from) => {
       try {
-        for (const p of [G.ROUNDS, G.SETTINGS]) await G.resync(from, p);
+        await G.resyncAll(from);
         toast("두 저장소를 맞췄습니다.");
         await loadAll(true);
         settingsView();
       } catch (e) { toast(e.message, 6000); }
     };
     app.querySelectorAll("[data-sync]").forEach((b) => (b.onclick = () => doSync(b.dataset.sync)));
-    $("bTest").onclick = async () => toast((await G.testToken()).msg, 4000);
-    $("bTokDel").onclick = () => { G.setCfg({ token: "" }); toast("이 기기에서 토큰을 지웠습니다."); renderStatus(); settingsView(); };
+    if ($("bTest")) $("bTest").onclick = async () => toast((await G.testToken()).msg, 4000);
+    if ($("bTokDel")) $("bTokDel").onclick = () => { G.setCfg({ token: "" }); toast("이 기기에서 토큰을 지웠습니다."); renderStatus(); settingsView(); };
     $("bSaveSet").onclick = async () => {
       app.querySelectorAll("[data-t]").forEach((el) => { const t = tg[el.dataset.t]; const v = Number(el.value); if (el.value !== "" && isNum(v)) t.v = t.fmt === "%" ? v / 100 : v; });
       app.querySelectorAll("[data-rz]").forEach((el) => { const v = Number(el.value); if (el.value !== "" && isNum(v)) rd[el.dataset.rz].zero = v / (RSCALE[el.dataset.rz] || 1); });
@@ -2412,7 +2419,7 @@
     $("bSaveClubs").onclick = async () => {
       settings.clubs = readClubs();
       try {
-        const { mirrorErrors } = await G.update(() => settings, "클럽 거리 변경", G.SETTINGS || "data/settings.json");
+        const { mirrorErrors } = await G.update(() => settings, "클럽 거리 변경", G.SETTINGS);
         toast(mirrorErrors.length ? "클럽 거리는 저장했지만 동기화 실패: " + mirrorErrors.join(" / ") : "클럽 거리를 저장했습니다.", 4000);
         settingsView();
       } catch (e) { toast(e.message, 6000); }

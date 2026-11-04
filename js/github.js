@@ -210,5 +210,31 @@ const GitHubStore = (() => {
     return { ok, msg: (ok ? "모든 저장소 저장 권한 확인됨" : "권한 확인 필요 — ") + " (" + results.join(", ") + ")" };
   }
 
-  return { cfg, setCfg, canWrite, load, update, syncStatus, resync, pending, testToken, putFile, deleteFile, rawUrl, DATA_DIR, PRIMARY, MIRRORS, IS_ORIGIN, ORIGIN, ROUNDS, SETTINGS };
+  /* ── 저장 층 공통 약속 ──
+   * app.js는 아래 이름만 쓰고 GitHub 전용 값(PRIMARY·MIRRORS·DATA_DIR 등)은 직접 보지 않는다.
+   * 휴대폰판(localstore.js)·서버판(api.js)이 같은 이름으로 바꿔 끼우면 화면 코드는 그대로 동작한다. */
+  const KIND = "github";                                   // 설정 화면의 「저장 연결」 부분을 고를 때 쓴다
+  const COURSES = "data/courses.json";                     // 골프장 정보(회원 공용)
+  const COURSE_REQS = "data/course-requests.json";         // 골프장 정보 요청
+  const mediaPath = (file) => `${DATA_DIR}/photos/${file}`; // 사진·동영상을 올릴 경로
+  const mediaUrl = rawUrl;                                 // 저장된 사진·동영상·홀 그림을 볼 주소
+  // 저장 위치 안내(환영 상자·가이드·초기화 문구용)
+  const where = () => ({
+    isOwner: IS_ORIGIN,
+    label: `${PRIMARY.owner}/${PRIMARY.repo}`,
+    file: ROUNDS,
+    siteUrl: `${PRIMARY.owner}.github.io/${PRIMARY.repo}`,
+    repos: [PRIMARY.repo, ...MIRRORS.map((m) => m.repo)],
+    origin: `${ORIGIN.owner}/${ORIGIN.repo}`,
+  });
+  const hasMirrors = () => MIRRORS.length > 0;
+  const mirrorRepos = () => [PRIMARY, ...MIRRORS].map((r) => r.repo);
+  const resyncAll = async (fromRepo) => { for (const p of [ROUNDS, SETTINGS]) await resync(fromRepo, p); };
+
+  return {
+    KIND, cfg, setCfg, canWrite, load, update, putFile, deleteFile, rawUrl, mediaUrl, mediaPath,
+    ROUNDS, SETTINGS, COURSES, COURSE_REQS, where,
+    // GitHub판에만 있는 기능(토큰·동기화) — 설정 화면의 GitHub 연결 부분에서만 쓴다
+    testToken, syncStatus, resync, resyncAll, pending, hasMirrors, mirrorRepos,
+  };
 })();
