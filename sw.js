@@ -26,3 +26,18 @@ self.addEventListener("fetch", (e) => {
     })
   );
 });
+
+// 서버판 라운드 전날 알림(웹 푸시). GitHub판은 구독하지 않으므로 동작 없음
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: "My Golf Lounge", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "My Golf Lounge", { body: d.body || "", icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { url: d.url || "/" } }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || "/", self.location.origin).href;
+  e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then((ws) => {
+    const w = ws.find((c) => c.url.startsWith(self.location.origin));
+    return w ? w.navigate(url).then((c) => (c || w).focus()) : clients.openWindow(url);
+  }));
+});

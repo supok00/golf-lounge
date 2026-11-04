@@ -2259,6 +2259,7 @@
     const me = typeof G.me === "function" ? G.me() : null;
     return `<h2>내 계정</h2>
       <div class="card"><p class="mt0">${me ? `<b>${esc(me.nickname || "")}</b> (${esc(me.email || "")})로 로그인했습니다.` : "로그인하지 않았습니다."}</p>
+        ${me && G.pushStatus ? `<p id="pushBox" class="muted">라운드 전날 알림 확인 중…</p>` : ""}
         <div class="row">${me ? `<a class="btn" href="friends.html">친구·순위</a>` : ""}${me && me.role === "admin" ? `<a class="btn ghost" href="admin.html">관리자 화면</a>` : ""}${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div></div>`;
   }
   function settingsView() {
@@ -2349,6 +2350,20 @@
     const $ = (s) => document.getElementById(s);
     if ($("bInstall")) $("bInstall").onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; settingsView(); };
     if ($("bLogout")) $("bLogout").onclick = () => G.logout();
+    // 서버판: 라운드 전날 19시 알림(예정 라운드 → 홀별 공략)
+    const pushBox = $("pushBox");
+    const renderPush = async () => {
+      const st = await G.pushStatus().catch(() => "unsupported");
+      pushBox.innerHTML = {
+        on: `🔔 <b>라운드 전날 알림 켜짐</b>(이 기기) — 예정 라운드 전날 19시에 홀별 공략 알림 <button class="link" id="bPushOff" type="button">끄기</button>`,
+        off: `🔕 라운드 전날 알림 꺼짐 <button class="btn ghost xs" id="bPushOn" type="button">이 기기에서 켜기</button>`,
+        denied: `🔕 이 브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 알림을 허용하세요.`,
+        unsupported: `이 브라우저는 알림을 지원하지 않습니다(아이폰은 홈 화면에 추가한 앱에서만).`,
+      }[st];
+      if ($("bPushOn")) $("bPushOn").onclick = async () => { try { await G.pushEnable(); toast("알림을 켰습니다. 시험 알림을 보냈습니다.", 4000); } catch (e) { toast(e.message, 5000); } renderPush(); };
+      if ($("bPushOff")) $("bPushOff").onclick = async () => { await G.pushDisable(); toast("이 기기의 알림을 껐습니다."); renderPush(); };
+    };
+    if (pushBox) renderPush();
     if ($("bTok")) $("bTok").onclick = async () => {
       const v = $("tok").value.trim();
       if (!v) return toast("토큰을 입력하세요.");
