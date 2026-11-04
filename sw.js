@@ -16,7 +16,8 @@ self.addEventListener("activate", (e) => {
 });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== "GET" || url.hostname === "api.github.com" || url.pathname.includes("/data/")) return;
+  // 데이터·로그인 응답은 캐시하지 않는다: GitHub API, data/ 파일, 서버판 /api/(로그인 상태·회원별 기록·사진)
+  if (e.request.method !== "GET" || url.hostname === "api.github.com" || url.pathname.includes("/data/") || url.pathname.startsWith("/api/")) return;
   e.respondWith(
     caches.open(CACHE).then(async (c) => {
       const hit = await c.match(e.request, { ignoreSearch: true });
