@@ -163,7 +163,7 @@
       if (s.data) settings = deepMerge(structuredClone(S.DEFAULT_SETTINGS), s.data);
       fixRadarLabels();
       await loadCourses();
-      if (!quiet) toast(source === "github" ? "GitHub 최신 데이터를 불러왔습니다." : "배포본 데이터를 불러왔습니다(GitHub API 한도 초과 등).");
+      if (!quiet) toast(source === "github" ? "GitHub 최신 데이터를 불러왔습니다." : source === "server" ? "서버에서 최신 데이터를 불러왔습니다." : "배포본 데이터를 불러왔습니다(GitHub API 한도 초과 등).");
     } catch (e) {
       const cached = ls.get(KEY_CACHE);
       if (Array.isArray(cached)) { rounds = cached; source = "cache"; }
@@ -191,7 +191,7 @@
   function renderStatus() {
     const el = document.getElementById("status");
     if (!el) return;
-    const src = { github: "GitHub 최신본", pages: "배포본(최대 몇 분 늦을 수 있음)", cache: "이 기기 캐시(오프라인)" }[source] || "-";
+    const src = { github: "GitHub 최신본", server: "서버", pages: "배포본(최대 몇 분 늦을 수 있음)", cache: "이 기기 캐시(오프라인)" }[source] || "-";
     el.innerHTML = `${G.pending?.() ? `<a class="ng" href="#/settings" style="color:#d9475a;font-weight:700">⚠ 동기화 필요</a>` : ""}<span>데이터: ${src}${loadedAt ? " · " + loadedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
       <span class="${G.canWrite() ? "ok" : "muted"}">${G.canWrite() ? "● 저장 가능" : "○ 읽기 전용"}</span>
       <button class="link" id="bReload" type="button">새로고침</button>
@@ -2258,7 +2258,8 @@
   function accountHtml() {
     const me = typeof G.me === "function" ? G.me() : null;
     return `<h2>내 계정</h2>
-      <div class="card"><p class="mt0">${me ? `<b>${esc(me.nickname || me.email || "")}</b>로 로그인했습니다.` : "로그인하지 않았습니다."}</p></div>`;
+      <div class="card"><p class="mt0">${me ? `<b>${esc(me.nickname || "")}</b> (${esc(me.email || "")})로 로그인했습니다.` : "로그인하지 않았습니다."}</p>
+        ${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div>`;
   }
   function settingsView() {
     const c = G.cfg ? G.cfg() : {};
@@ -2347,6 +2348,7 @@
       </div>`}`;
     const $ = (s) => document.getElementById(s);
     if ($("bInstall")) $("bInstall").onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; settingsView(); };
+    if ($("bLogout")) $("bLogout").onclick = () => G.logout();
     if ($("bTok")) $("bTok").onclick = async () => {
       const v = $("tok").value.trim();
       if (!v) return toast("토큰을 입력하세요.");
