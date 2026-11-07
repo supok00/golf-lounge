@@ -591,7 +591,7 @@ const Extra = (() => {
       <div class="home-hello"><h2>⛳ ${esc(me?.nickname || "")}님, ${hi}</h2><span class="muted">${new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })}</span></div>
       <div class="quick">
         <a href="#/register/input" style="background:var(--mint)"><i>✏️</i><b>라운드 기록하기</b><span>홀별 점수 직접 입력</span></a>
-        <a href="#/register/paste" style="background:var(--sky)"><i>📸</i><b>사진·붙여넣기 등록</b><span>스코어카드 사진, 스마트스코어</span></a>
+        <a href="#/register/paste" style="background:var(--sky)"><i>📸</i><b>스코어·사진 등록</b><span>스코어카드 사진, 스마트스코어</span></a>
         <a href="#/schedule" style="background:var(--lav)"><i>📅</i><b>일정 보기</b><span>내 라운드 + 모임 일정</span></a>
         <a href="#/mypage/settings" style="background:var(--peach)"><i>🔔</i><b>알림·앱 설치</b><span>라운드·일정 전날 알림</span></a>
       </div>
