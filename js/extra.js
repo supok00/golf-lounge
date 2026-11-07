@@ -690,7 +690,7 @@ const Extra = (() => {
         <li><button type="button" data-open="pw">비밀번호 변경 <span class="arr">›</span></button></li>
         <li><a href="#/mypage/settings">알림 · 지표 기준 · 클럽 거리 · 백업 <span class="arr">›</span></a></li>
         <li><a href="#/mypage/activity">최근 활동 기록 <span class="arr">›</span></a></li>
-        ${user.role === "admin" ? `<li><a href="/admin/">관리자 화면 <span class="arr">↗</span></a></li>` : ""}
+        ${user.role === "admin" ? `<li><a href="https://${location.hostname}:7890/admin/">관리자 화면 <span class="arr">↗</span></a></li>` : ""}
         <li><button type="button" data-open="bye">회원 탈퇴 <span class="arr">›</span></button></li>
       </ul></div>
       <div id="pPanel"></div>

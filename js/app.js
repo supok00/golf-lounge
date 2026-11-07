@@ -2436,7 +2436,7 @@
     return `<h2>내 계정</h2>
       <div class="card"><p class="mt0">${me ? `<b>${esc(me.nickname || "")}</b> (${esc(me.email || "")})로 로그인했습니다.` : "로그인하지 않았습니다."}</p>
         ${me && G.pushStatus ? `<p id="pushBox" class="muted">전날 알림 확인 중…</p>` : ""}
-        <div class="row">${me ? `<a class="btn" href="#/friends">친구</a>` : ""}${me && me.role === "admin" ? `<a class="btn ghost" href="/admin/">관리자 화면</a>` : ""}${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div></div>`;
+        <div class="row">${me ? `<a class="btn" href="#/friends">친구</a>` : ""}${me && me.role === "admin" ? `<a class="btn ghost" href="https://${location.hostname}:7890/admin/">관리자 화면</a>` : ""}${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div></div>`;
   }
   function guideViewGH() {
     app.innerHTML = `<div class="notice" style="margin-bottom:12px"><b>메뉴 안내</b> — 왼쪽 메뉴(휴대폰은 아래 탭): 홈 · 라운드 기록 · 라운드 입력 · 통계 · 가이드 · 설정. 가이드에 나오는 「분석」「기록·동반자」는 지금 <b>통계</b> 메뉴(스코어·베스트 스코어·홀파·퍼트·샷 분석·라운드 인사이트·동반 기록·자주 가는 골프장 탭)에 있고, 「붙여넣기 등록」은 <b>라운드 입력</b>의 붙여넣기·사진 탭입니다. 모임·일정·친구는 서버판(golflounge.duckdns.org)에만 있습니다.</div>
@@ -2825,7 +2825,7 @@
       const me = G.me();
       if (!me) return;
       document.getElementById("sideFoot").innerHTML = `<span><b>${esc(me.nickname)}</b>님</span>
-        <a href="#/mypage">마이페이지</a>${me.role === "admin" ? `<a href="/admin/">관리자 화면 ↗</a>` : ""}
+        <a href="#/mypage">마이페이지</a>${me.role === "admin" ? `<a href="https://${location.hostname}:7890/admin/">관리자 화면 ↗</a>` : ""}
         <button type="button" id="sideLogout">로그아웃</button>`;
       document.getElementById("sideLogout").onclick = () => G.logout();
     });
