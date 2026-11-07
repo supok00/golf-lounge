@@ -578,7 +578,8 @@
   }
   // 홈 맨 위: 오늘 이후 예정 라운드(라운드 전에 코스 정보만 등록해 둔 것)
   function upcomingBox() {
-    const up = rounds.filter((r) => r.planned && dday(r.date) >= 0).sort((a, b) => (a.date < b.date ? -1 : 1));
+    // 내일 이후 날짜면 미리 값을 적어 둔 라운드(planned가 풀림)도 다가오는 라운드로 보여 준다
+    const up = rounds.filter((r) => (r.planned && dday(r.date) >= 0) || dday(r.date) > 0).sort((a, b) => (a.date < b.date ? -1 : 1));
     if (!up.length) return "";
     return `<div class="card upcoming"><div class="mt0" style="margin-bottom:8px">⛳ <b>다가오는 라운드</b> <span class="muted">${up.length}개</span></div>${up.map((r) => { const d = dday(r.date), CH = courseHoles(r); return `<div class="row up-row">
       <div><span class="pill ${d <= 3 ? "ng" : ""}">${d === 0 ? "오늘" : "D-" + d}</span>
