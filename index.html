@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>My Golf Lounge</title>
+<title>Our Golf Lounge</title>
 <meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -12,25 +12,36 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header class="top">
-  <div class="topbar">
-    <a class="brand" href="#/dashboard" aria-label="홈으로">⛳ <b>My Golf Lounge</b> <span class="brand-sub">내 라운드 기록</span></a>
-    <div class="status" id="status"></div>
-  </div>
-  <nav class="tabs" id="tabs">
+<aside class="side" id="side" aria-label="주 메뉴">
+  <a class="side-brand" href="#/dashboard" title="홈으로">⛳ <b>Our Golf Lounge</b></a>
+  <nav class="side-nav" id="tabs">
     <a href="#/dashboard" data-tab="dashboard"><i>🏠</i>홈</a>
-    <a href="#/analysis" data-tab="analysis"><i>📈</i>분석</a>
-    <a href="#/insights" data-tab="insights"><i>🧭</i>기록·동반자</a>
-    <a href="#/rounds" data-tab="rounds"><i>📒</i>라운드 목록</a>
+    <a href="#/rounds" data-tab="rounds"><i>📒</i>라운드 기록</a>
     <a href="#/register" data-tab="register"><i>✏️</i>라운드 입력</a>
+    <a href="#/analysis" data-tab="analysis"><i>📈</i>통계</a>
     <a href="#/guide" data-tab="guide"><i>📖</i>가이드</a>
     <a href="#/settings" data-tab="settings"><i>⚙️</i>설정</a>
   </nav>
-</header>
-<div id="subnav"></div>
-<main id="app"></main>
+  <div class="side-foot" id="sideFoot"><div class="status" id="status"></div></div>
+</aside>
+<div class="side-dim" id="sideDim"></div>
+<div class="shell">
+  <header class="mtop">
+    <button class="menu-btn" id="menuBtn" type="button" aria-label="메뉴 열기">☰</button>
+    <a class="mtop-brand" href="#/dashboard" title="홈으로">⛳ <b>Our Golf Lounge</b></a>
+  </header>
+  <div id="subnav"></div>
+  <main id="app"></main>
+</div>
+<nav class="bottom-tabs" id="bottomTabs" aria-label="하단 메뉴">
+  <a href="#/dashboard" data-tab="dashboard"><i>🏠</i>홈</a>
+  <a href="#/rounds" data-tab="rounds"><i>📒</i>기록</a>
+  <a href="#/register" data-tab="register"><i>✏️</i>입력</a>
+  <a href="#/analysis" data-tab="analysis"><i>📈</i>통계</a>
+  <a href="#/settings" data-tab="settings"><i>⚙️</i>설정</a>
+</nav>
 <div id="toast" class="toast" hidden></div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
 <script src="js/version.js"></script>
 <script src="js/github.js"></script>
 <script src="js/stats.js"></script>
@@ -40,6 +51,7 @@
 <script src="js/smartscore.js"></script>
 <script src="js/companions.js"></script>
 <script src="js/guide.js"></script>
+<script src="js/extra.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

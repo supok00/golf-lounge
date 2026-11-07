@@ -1,5 +1,5 @@
-/* 골프 라운드 분석 웹앱 — 화면 렌더링.
- * 데이터 원본은 GitHub 저장소의 rounds.json, settings.json 이다(위치는 GitHubStore가 정한다 — 원래 주인은 data/, Fork한 사람은 data/users/계정/).
+/* 골프 라운드 분석 웹앱 — 화면 렌더링. GitHub판·서버판이 같은 파일을 쓴다(판 구분: SRV).
+ * 데이터 저장: GitHub판은 js/github.js(GitHub 저장소의 rounds.json 등), 서버판은 js/api.js(서버 /api, 회원별) — 둘 다 이름은 GitHubStore.
  * 입력 중인 라운드만 이 브라우저에 임시 저장해, 저장 전에 화면이 닫혀도 잃지 않게 한다.
  */
 (() => {
@@ -16,8 +16,9 @@
   let loadedAt = null;
   let charts = [];
   let courseDB = [];   // data/courses.json: 골프장 홈페이지에서 옮긴 코스별 Par·핸디캡·거리·공략(라운드 전 등록용)
-  let courseReqs = []; // data/course-requests.json: 앱에서 보낸 「골프장 정보 요청」 대기열 — Claude Code가 tools/course_fetch.py로 처리(API 비용 없음)
+  let courseReqs = []; // 「골프장 정보 요청」 대기열(공용) — 관리자가 확인해 골프장 정보를 등록
   const COURSES_PATH = G.COURSES, REQS_PATH = G.COURSE_REQS;
+  const SRV = G.KIND === "server";   // 서버판에만 있는 기능(모임·일정·친구·로그인·알림)은 이 값으로 켜고 끈다
 
   // ───────────── 유틸 ─────────────
   const isNum = S.isNum;
@@ -28,6 +29,8 @@
   const sgn = (v, d = 2) => (isNum(v) ? (v > 0 ? "+" : "") + v.toFixed(d) : "-");
   const fmtT = (v, t) => (t === "%" ? pct(v) : t === "m" ? (isNum(v) ? v.toFixed(1) + "m" : "-") : f1(v));
   const dot = (d) => String(d || "").replaceAll("-", ".");
+  // 링크 주소는 http(s)만(javascript: 등 차단), 그대로 escape
+  const safeUrl = (u) => (/^https?:\/\//i.test(String(u || "").trim()) ? esc(String(u).trim()) : "");
   const ls = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 공간 없음 */ } },
@@ -153,6 +156,7 @@
   async function loadAll(quiet) {
     try {
       const r = await G.load();
+      if (r.source === "server") { source = "server"; loadedAt = new Date(); }   // 기록이 아직 없어도 서버에서 읽은 것
       if (Array.isArray(r.data)) {
         rounds = r.data;
         source = r.missing ? "pages" : r.source;
@@ -163,7 +167,7 @@
       if (s.data) settings = deepMerge(structuredClone(S.DEFAULT_SETTINGS), s.data);
       fixRadarLabels();
       await loadCourses();
-      if (!quiet) toast(source === "github" ? "GitHub 최신 데이터를 불러왔습니다." : source === "server" ? "서버에서 최신 데이터를 불러왔습니다." : "배포본 데이터를 불러왔습니다(GitHub API 한도 초과 등).");
+      if (!quiet) toast(source === "server" ? "최신 기록을 불러왔습니다." : source === "github" ? "GitHub 최신 데이터를 불러왔습니다." : source === "pages" ? "배포본 데이터를 불러왔습니다(GitHub API 한도 초과 등)." : "이 기기에 저장된 기록을 보여 줍니다.");
     } catch (e) {
       const cached = ls.get(KEY_CACHE);
       if (Array.isArray(cached)) { rounds = cached; source = "cache"; }
@@ -171,7 +175,7 @@
     }
     renderStatus();
   }
-  // 골프장 정보·요청 현황. 자동 등록이 커밋한 직후에도 보이도록 배포본 대신 GitHub에서 읽는다(실패하면 배포본)
+  // 골프장 정보·요청 현황(공용)
   async function loadCourses() {
     const [c, q] = await Promise.all([G.load(COURSES_PATH).catch(() => null), G.load(REQS_PATH).catch(() => null)]);
     if (Array.isArray(c?.data)) courseDB = c.data;
@@ -191,7 +195,7 @@
   function renderStatus() {
     const el = document.getElementById("status");
     if (!el) return;
-    const src = { github: "GitHub 최신본", server: "서버", pages: "배포본(최대 몇 분 늦을 수 있음)", cache: "이 기기 캐시(오프라인)" }[source] || "-";
+    const src = { server: "서버", github: "GitHub 최신본", pages: "배포본(최대 몇 분 늦을 수 있음)", cache: "이 기기 캐시(오프라인)" }[source] || "-";
     el.innerHTML = `${G.pending?.() ? `<a class="ng" href="#/settings" style="color:#d9475a;font-weight:700">⚠ 동기화 필요</a>` : ""}<span>데이터: ${src}${loadedAt ? " · " + loadedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
       <span class="${G.canWrite() ? "ok" : "muted"}">${G.canWrite() ? "● 저장 가능" : "○ 읽기 전용"}</span>
       <button class="link" id="bReload" type="button">새로고침</button>
@@ -200,9 +204,9 @@
   }
   async function commit(mutate, message) {
     const { data: next, mirrorErrors } = await G.update((data) => mutate(Array.isArray(data) ? data : []), message);
-    if (mirrorErrors.length) setTimeout(() => toast("저장은 됐지만 다른 저장소 동기화에 실패했습니다. 설정 → 동기화에서 다시 맞춰 주세요.\n" + mirrorErrors.join("\n"), 8000), 3000);
+    if (mirrorErrors.length) setTimeout(() => toast((SRV ? "저장은 됐지만 일부가 실패했습니다.\n" : "저장은 됐지만 다른 저장소 동기화에 실패했습니다. 설정 → 동기화에서 다시 맞춰 주세요.\n") + mirrorErrors.join("\n"), 8000), 3000);
     rounds = next;
-    source = "github";
+    source = SRV ? "server" : "github";
     loadedAt = new Date();
     ls.set(KEY_CACHE, rounds);
     renderStatus();
@@ -263,7 +267,7 @@
     return `<h3>홀별 야디지 · 공략 <span class="muted">${CH ? `${esc(CH.club.name)} ${esc(CH.tee)} 티${CH.green ? ` · ${CH.green}그린 기준` : ""}` : "입력한 거리 기준"} · OUT ${tot(1, 9, "dist")}m · IN ${tot(10, 18, "dist")}m</span></h3>
       ${CH?.notes.some((n) => /없|확인|추정/.test(n)) ? `<div class="notice" style="margin-bottom:8px">⚠ 등록 기준 확인: ${CH.notes.map(esc).join(" / ")}</div>` : ""}
       <div class="hguide">${rows.map(card).join("")}</div>
-      <p class="legend-note">「내 공략」은 <a href="#/settings?sec=clubs">내 클럽 거리</a>로 계산한 추정입니다(티샷은 드라이버 평균 거리 가정${Clubs.isDefault(settings) ? ", 지금은 예시 클럽 거리" : ""}). 「📍」는 골프장 홈페이지 코스 안내를 요약한 공략이고, 「🗺 홀 그림」은 홈페이지 홀맵(해저드·벙커까지 거리, 고저차 포함 · 그림 속 숫자는 야드)입니다. 거리는 모두 미터(홈페이지 야드 × 0.9144)입니다.${CH?.club.url ? ` 출처: <a href="${esc(CH.club.url)}" target="_blank" rel="noopener">${esc(CH.club.name)} 홈페이지</a> (${esc(CH.club.updated || "")})` : ""}</p>`;
+      <p class="legend-note">「내 공략」은 <a href="#/settings?sec=clubs">내 클럽 거리</a>로 계산한 추정입니다(티샷은 드라이버 평균 거리 가정${Clubs.isDefault(settings) ? ", 지금은 예시 클럽 거리" : ""}). 「📍」는 골프장 홈페이지 코스 안내를 요약한 공략이고, 「🗺 홀 그림」은 홈페이지 홀맵(해저드·벙커까지 거리, 고저차 포함 · 그림 속 숫자는 야드)입니다. 거리는 모두 미터(홈페이지 야드 × 0.9144)입니다.${safeUrl(CH?.club.url) ? ` 출처: <a href="${safeUrl(CH.club.url)}" target="_blank" rel="noopener">${esc(CH.club.name)} 홈페이지</a> (${esc(CH.club.updated || "")})` : ""}</p>`;
   }
 
   const courseAsset = (path) => G.mediaUrl(path);
@@ -273,20 +277,20 @@
   }
 
   /* 골프장 정보 요청: 이름·홈페이지·코스·티를 data/course-requests.json 대기열에 남긴다.
-   * Claude Code에서 「골프장 요청 처리해줘」라고 하면 홈페이지(표·홀 그림)를 읽어 등록하고 「완료」로 바꾼다.
+   * 관리자가 홈페이지(표·홀 그림)를 확인해 등록하고 「완료」로 바꾼다.
    * pre: 입력 화면에서 적은 값으로 미리 채움. onDone: 요청을 저장한 뒤 다시 그리기 */
   const REQ_TONE = { 요청: "", "처리 중": "", 완료: "ok", 실패: "ng" };
   function reqStatusList(limit = 6) {
     const list = courseReqs.filter((q) => !(q.status === "완료" && findCourse(q.club || q.name) && clubUsed(findCourse(q.club || q.name)))).reverse().slice(0, limit);
     if (!list.length) return "";
     return `<div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th class="l">요청</th><th>상태</th><th class="l">결과</th></tr></thead><tbody>${list.map((q) => `<tr>
-      <td class="l">${q.status === "완료" && findCourse(q.club || q.name) ? `<a href="#/course/${encodeURIComponent(findCourse(q.club || q.name).name)}"><b>${esc(q.name)}</b></a>` : `<b>${esc(q.name)}</b>`} <span class="muted">${esc(q.courses.join("·"))} · ${esc(q.tee)}</span><br><span class="muted">${esc(q.requested || "")}</span></td>
-      <td><span class="pill ${REQ_TONE[q.status] || ""}">${esc(q.status)}</span></td><td class="l wrap">${esc(q.message || (q.status === "요청" ? "대기 중 — Claude Code에서 「골프장 요청 처리해줘」라고 하면 등록됩니다" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
+      <td class="l">${q.status === "완료" && findCourse(q.club || q.name) ? `<a href="#/course/${encodeURIComponent(findCourse(q.club || q.name).name)}"><b>${esc(q.name)}</b></a>` : `<b>${esc(q.name)}</b>`} <span class="muted">${esc((Array.isArray(q.courses) ? q.courses : []).join("·"))} · ${esc(q.tee)}</span><br><span class="muted">${esc(q.requested || "")}</span></td>
+      <td><span class="pill ${REQ_TONE[q.status] || ""}">${esc(q.status)}</span></td><td class="l wrap">${esc(q.message || (q.status === "요청" ? "대기 중 — 관리자가 확인해 등록합니다" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
   }
   function courseRequestForm(box, pre = {}, onDone = () => {}) {
     const pending = courseReqs.some((q) => q.status === "요청");
     box.innerHTML = `<div class="card" style="margin-top:10px"><h3 class="mt0">🔎 새 골프장 정보 요청</h3>
-      <p class="legend-note mt0">요청은 대기 목록에 저장됩니다. <b>Claude Code에서 「골프장 요청 처리해줘」</b>라고 하면 홈페이지(표·홀 그림)를 읽어 Par·핸디캡·거리(m)·공략·홀 그림을 등록합니다(추가 비용 없음). <b>라운드 날짜</b>를 적으면 그 날짜의 <b>예정 라운드</b>까지 만들어 두고, 골프장은 목록에서 빠집니다(날짜가 없으면 「등록된 골프장」에 남아 있다가 그 골프장으로 라운드를 저장하면 빠짐). 투 그린이면 좌그린, 같은 색 티가 여러 개면 가장 먼 티 기준입니다.</p>
+      <p class="legend-note mt0">요청은 대기 목록에 저장되고, <b>관리자가 골프장 홈페이지를 확인해</b> Par·핸디캡·거리(m)·공략·홀 그림을 등록합니다. <b>라운드 날짜</b>를 적으면 그 날짜의 <b>예정 라운드</b>까지 만들어 두고, 골프장은 목록에서 빠집니다(날짜가 없으면 「등록된 골프장」에 남아 있다가 그 골프장으로 라운드를 저장하면 빠짐). 투 그린이면 좌그린, 같은 색 티가 여러 개면 가장 먼 티 기준입니다.</p>
       <div class="form">
         <label class="f">골프장 이름<input id="rqName" value="${esc(pre.course || "")}" placeholder="예: 아시아나CC"></label>
         <label class="f wide">홈페이지 주소<input id="rqUrl" type="url" value="${esc(findCourse(pre.course)?.url || "")}" placeholder="https://www.골프장.co.kr/"></label>
@@ -296,8 +300,8 @@
         <label class="f wide">메모(선택)<input id="rqMemo" placeholder="예: 홀 안내는 코스 소개 → 홀 공략 메뉴"></label>
       </div>
       <div class="row" style="margin-top:10px"><button class="btn" id="rqSend" type="button" ${G.canWrite() ? "" : "disabled"}>요청 저장</button><button class="btn ghost" id="rqReload" type="button">새로 고침</button><button class="link" id="rqClose" type="button">닫기</button></div>
-      ${G.canWrite() ? "" : `<p class="legend-note ng">요청은 GitHub 토큰이 있는 기기에서 보낼 수 있습니다(설정).</p>`}
-      ${pending ? `<p class="legend-note"><b>대기 중인 요청이 있습니다.</b> Claude Code에서 처리하면 「완료」로 바뀝니다.</p>` : ""}
+      ${G.canWrite() ? "" : `<p class="legend-note ng">${SRV ? "요청은 로그인한 뒤 보낼 수 있습니다." : "요청은 GitHub 토큰이 있는 기기에서 보낼 수 있습니다(설정)."}</p>`}
+      ${pending ? `<p class="legend-note"><b>대기 중인 요청이 있습니다.</b> 관리자가 홈페이지를 확인해 등록하면 「완료」로 바뀝니다.</p>` : ""}
       ${reqStatusList()}</div>`;
     const v = (id) => document.getElementById(id).value.trim();
     document.getElementById("rqClose").onclick = () => (box.innerHTML = "");
@@ -311,9 +315,9 @@
       if (courseReqs.some((x) => x.status === "요청" && same(x))) return toast("같은 요청이 이미 대기 중입니다.", 4000);
       e.target.disabled = true; e.target.textContent = "보내는 중…";
       try {
-        const { data } = await G.update((list) => [...(Array.isArray(list) ? list : []), q], `골프장 정보 요청: ${q.name} ${q.courses.join("·")} ${q.tee}`, REQS_PATH);
-        courseReqs = data;
-        toast("요청을 대기 목록에 저장했습니다. Claude Code에서 「골프장 요청 처리해줘」라고 하면 등록됩니다.", 6000);
+        if (SRV) courseReqs = (await G.api("POST", "/api/course-requests", q)).list;
+        else courseReqs = (await G.update((list) => [...(Array.isArray(list) ? list : []), q], `골프장 정보 요청: ${q.name} ${q.courses.join("·")} ${q.tee}`, REQS_PATH)).data;
+        toast("요청을 저장했습니다. 관리자가 확인해 등록하면 「완료」로 바뀝니다.", 6000);
         courseRequestForm(box, pre, onDone);
         onDone();
       } catch (err) { toast(err.message, 6000); e.target.disabled = false; e.target.textContent = "요청 저장"; }
@@ -354,7 +358,7 @@
     const plans = rounds.filter((x) => x.planned && normName(x.course) === normName(club.name)).sort((a, b) => (a.date < b.date ? -1 : 1));
     app.innerHTML = `
       <div class="row" style="justify-content:space-between"><h2>${esc(club.name)} <span class="muted">${club.region ? "📍" + esc(club.region) + " · " : ""}${cs.map((x) => esc(x.name)).join("·")} 코스</span></h2>
-        <div class="row">${club.url ? `<a class="btn ghost" href="${esc(club.url)}" target="_blank" rel="noopener">홈페이지</a>` : ""}<button class="btn" id="cvPlan" type="button">이 코스로 라운드 입력</button></div></div>
+        <div class="row">${safeUrl(club.url) ? `<a class="btn ghost" href="${safeUrl(club.url)}" target="_blank" rel="noopener">홈페이지</a>` : ""}<button class="btn" id="cvPlan" type="button">이 코스로 라운드 입력</button></div></div>
       ${plans.length ? `<div class="notice">예정 라운드: ${plans.map((x) => `<a href="#/round/${encodeURIComponent(x.id)}">${dot(x.date)} ${esc([x.front, x.back].filter(Boolean).join("·"))} ${esc(x.tee || "")}</a>`).join(" · ")}</div>` : ""}
       <div class="card" style="margin-top:10px"><div class="form">
         <label class="f">전반 코스<select id="cvFront">${opt(st.front)}</select></label>
@@ -424,7 +428,8 @@
     dashboard: ["위 조건에 맞는 라운드로 실력 진단·육각형·타수 손실을 계산합니다.", "타수 지표는 18홀 라운드, 퍼트·GIR·FW·스크램블·벌타는 퍼트를 기록한 라운드 기준입니다."],
     rounds: ["라운드를 누르면 스코어카드가 열립니다. 골프장 검색·기간으로 좁혀 볼 수 있습니다."],
     stats: ["스코어 유형 카드를 누르면 그 스코어가 나온 라운드가 아래에 나옵니다.", "추이 그래프는 기간이 1년 이하면 월별, 3년 이하면 분기별, 그 이상은 연도별로 묶습니다. 연도를 고르면 그해를 월별로 봅니다.", "골프장 이름을 누르면 그 골프장 라운드만 걸러 봅니다."],
-    insights: ["라운드 날짜·시간으로 만든 요약입니다. 오전/오후는 티오프 시간이 있는 라운드(스마트스코어 붙여넣기 등)만 집계합니다."],
+    insights: ["라운드 날짜·시간으로 만든 요약입니다. 오전/오후는 티오프 시간이 있는 라운드(스마트스코어 붙여넣기 등)만 집계합니다.", "모임/개인은 라운드 입력의 「유형」으로 셉니다. 유형을 안 고른 예전 라운드는 모임 일정에 「참석」으로 표시한 날이면 모임으로 봅니다."],
+    companions: ["라운드에 동반자 점수를 넣은 경우 동반자별로 함께한 횟수와 18홀 총타수 승패를 비교합니다.", "이름을 고치면 그 이름이 들어간 모든 라운드에 반영됩니다. 친구 회원과 연결하려면 「친구 → 동반자 연결」을 쓰세요."],
     holes: ["Par가 기록된 홀만 집계합니다."],
     detail: ["v2 「상세분석」 7개 블록에 ⑧ 홀 길이별(실제로 친 티 거리) 분석을 더했습니다. 상세 항목을 기록한 홀만 각 표에 들어갑니다.", "⑪ 홀 메모는 라운드 입력의 홀별 「메모」를 샷 종류(티샷·세컨·어프로치·벙커·퍼트)와 잘함/미스로 나눠 모읍니다."],
     putts: ["퍼트 수와 「1st 퍼트 거리」를 기록한 홀로 짧은 퍼트 마무리와 긴 퍼트 거리감을 나눠 봅니다.", "위 기간 필터의 「최근 라운드」를 고르면 이번 라운드만 볼 수 있습니다."],
@@ -473,19 +478,28 @@
 
   // 메뉴를 줄이려고 비슷한 화면을 한 메뉴의 하위 탭으로 묶었다
   const SUB = {
-    analysis: [["score", "스코어", () => statsView()], ["holes", "홀·파", () => holesView()], ["putts", "퍼트", () => puttsView()], ["shots", "샷 분석", () => detailView()]],
+    analysis: [["score", "📝 스코어", () => statsView()], ["best", "🥇 베스트 스코어", () => X("best")], ["holes", "⛳ 홀·파", () => holesView()], ["putts", "🎯 퍼트", () => puttsView()], ["shots", "🏌️ 샷 분석", () => detailView()]],
     register: [["input", "직접 입력", () => inputView(null)], ["paste", "붙여넣기·사진", () => importView()]],
+    // 서버판: 통계에 기록·동반자·친구 순위를 모으고, 친구·마이페이지는 extra.js 화면
+    friends: [["list", "친구", () => X("friends")], ["links", "동반자 연결", () => X("links")], ["shared", "함께한 라운드", () => X("shared")]],
+    mypage: [["profile", "내 정보", () => X("profile")], ["activity", "활동", () => X("activity")], ["settings", "설정", () => settingsView()]],
   };
+  SUB.analysis.push(["insights", "🧭 라운드 인사이트", () => insightsView("insight")], ["companions", "👥 동반 기록", () => insightsView("comp")], ["courses", "🗺️ 자주 가는 골프장", () => X("freq")], ...(SRV ? [["ranking", "🏆 친구 순위", () => X("ranking")]] : []));
+  if (!SRV) { delete SUB.friends; delete SUB.mypage; }   // GitHub판: 친구·마이페이지 없음(설정은 따로 메뉴)
+  // extra.js 화면 호출: 앱의 공용 도구를 넘겨 준다
+  const X = (name, arg) => Extra[name]({ app, esc, toast, G, route, reload: () => loadAll(true), rounds: () => rounds, arg });
   function route() {
     charts.forEach((c) => c.destroy());
     charts = [];
     const [, tab = "dashboard", arg] = location.hash.split("?")[0].split("/");
     // 예전 주소(#/stats 등)도 새 메뉴의 하위 탭으로 연다
-    const OLD = { stats: ["analysis", "score"], holes: ["analysis", "holes"], detail: ["analysis", "shots"], input: ["register", "input"], import: ["register", "paste"] };
+    const OLD = { stats: ["analysis", "score"], holes: ["analysis", "holes"], detail: ["analysis", "shots"], input: ["register", "input"], import: ["register", "paste"], insights: ["analysis", "insights"], ...(SRV ? { settings: ["mypage", "settings"] } : {}) };
     const [grp, sub] = OLD[tab] || (SUB[tab] ? [tab, arg] : [null, null]);
-    const active = tab === "round" || tab === "edit" || tab === "course" ? "rounds" : tab === "review" ? "guide" : grp || tab;
-    document.querySelectorAll("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.tab === active));
-    const views = { dashboard, input: () => inputView(null), edit: () => inputView(decodeURIComponent(arg || "")), rounds: roundsView, round: () => roundView(decodeURIComponent(arg || "")), stats: statsView, insights: insightsView, holes: holesView, detail: detailView, import: importView, guide: guideView, settings: settingsView, review: reviewView, course: () => courseView(decodeURIComponent(arg || "")) };
+    const active = tab === "round" || tab === "edit" || tab === "course" ? "rounds" : tab === "review" ? "guide" : tab === "group" ? "groups" : tab === "event" ? "schedule" : grp || tab;
+    document.body.classList.remove("side-open");
+    document.querySelectorAll("#tabs a, #bottomTabs a").forEach((a) => a.classList.toggle("active", a.dataset.tab === active || (a.dataset.tab === "groups" && active === "friends")));
+    const views = { dashboard: () => { dashboard(); if (SRV) X("homeTop"); }, input: () => inputView(null), edit: () => inputView(decodeURIComponent(arg || "")), rounds: roundsView, round: () => roundView(decodeURIComponent(arg || "")), stats: statsView, insights: insightsView, holes: holesView, detail: detailView, import: importView, guide: guideView, settings: settingsView, review: reviewView, course: () => courseView(decodeURIComponent(arg || "")),
+      ...(SRV ? { schedule: () => X("schedule"), groups: () => X("groups"), group: () => X("group", decodeURIComponent(arg || "")), event: () => X("event", decodeURIComponent(arg || "")) } : {}) };
     const nav = document.getElementById("subnav");
     if (grp) {
       const list = SUB[grp], it = list.find((x) => x[0] === sub) || list[0];
@@ -512,8 +526,8 @@
   const valCell = (v, t, ok, strong) => `<td class="${ok === null ? "" : ok ? "ok" : "ng"}">${strong ? "<b>" : ""}${fmtT(v, t.fmt)}${strong ? "</b>" : ""}</td>`;
   const goalText = (t) => `${fmtT(t.v, t.fmt)} ${t.low ? "이하" : "이상"}`;
 
-  // Fork한 사이트는 자기 폴더(data/users/계정)에 저장해 빈 기록으로 시작한다. 처음 쓰는 분께 순서를 안내한다.
   function welcomeBox() {
+    if (SRV) return "";
     if (G.where().isOwner || rounds.length) return "";
     return `<div class="card welcome">
       <h3 class="mt0">👋 내 골프 라운지에 오신 것을 환영합니다</h3>
@@ -722,6 +736,7 @@
     score: "파=0, 보기=1, 더블=2, 버디=-1. 비우면 온그린 타수+퍼트로 계산",
     putts: "비우면 스코어와 온그린 타수로 계산", fw: "파4·파5만", miss: "L 왼쪽 / R 오른쪽 / H 훅 / S 슬라이스 / - 없음",
     ong: "그린에 올라가기까지 친 타수(벌타 포함). 비우면 스코어와 퍼트로 계산", sg: "자동: 그린 놓친 홀에서 1퍼트로 막았거나 첫 퍼트 2m 이내면 ○",
+    bunker: "안 넣으면 0. 벙커에서 친 홀만 고르세요",
     gmiss: "그린을 놓친 방향", appr: "그린을 놓쳤을 때 핀까지 남은 거리",
   };
 
@@ -739,6 +754,8 @@
     const H = Object.fromEntries(Array.from({ length: 18 }, (_, i) => [i + 1, { h: i + 1 }]));
     (r.holes || []).forEach((h) => (H[h.h] = { ...h }));
     let cur = 1;
+    const compSt = { comps: structuredClone(r.companions || []), photos: [], removed: [], text: "" };
+    const compPars = {};   // 동반자 칸이 쓰는 Par(홀 기록의 Par가 바뀌면 따라 바뀜)
 
     /* ── 자동 입력: 위에서 적은 값으로 아래 칸을 채운다 ──
      * AUTO[홀]은 자동으로 채운 칸 이름 모음. 사용자가 그 칸을 직접 바꾸면 빠지고(직접 입력이 우선),
@@ -766,6 +783,7 @@
       if (g === 1) { out.gmiss = "-"; out.sg = null; }
       if (g === 0 && isNum(e.putts)) out.sg = e.putts <= 1 || (isNum(h.fp) && h.fp > 0 && h.fp <= 2) ? 1 : 0;
       if (isNum(e.score)) out.pen = 0;
+      if (isNum(e.score)) out.bunker = 0;   // 벙커샷은 넣지 않으면 0(들어간 홀만 고르면 됨)
       // OB는 벌타 중 일부: 벌타가 없으면 OB도 0, 벌타를 적었으면 OB 횟수는 직접 고른다
       const penM = isNum(h.pen) && !AUTO[h.h]?.has("pen") ? h.pen : 0;
       if (isNum(e.score)) out.ob = penM === 0 ? 0 : null;
@@ -806,7 +824,7 @@
 
     app.innerHTML = `
       <h2>${edit ? "라운드 수정" : "라운드 입력"}</h2>
-      ${G.canWrite() ? "" : `<div class="notice">지금은 <b>읽기 전용</b>입니다. 저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요. 입력 내용은 이 기기에 임시 저장됩니다.</div>`}
+      ${G.canWrite() ? "" : SRV ? `<div class="notice">로그인해야 저장할 수 있습니다. 입력 내용은 이 기기에 임시 저장됩니다.</div>` : `<div class="notice">지금은 <b>읽기 전용</b>입니다. 저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요. 입력 내용은 이 기기에 임시 저장됩니다.</div>`}
       ${draft ? `<div class="notice" style="margin-top:8px">이전에 입력하던 내용을 불러왔습니다. <button class="link" id="bDiscard" type="button">버리고 새로 시작</button></div>` : ""}
       <div class="card" style="margin-top:12px">
         <div class="form">
@@ -816,13 +834,15 @@
           <label class="f">후반 코스<input id="fBack" value="${esc(r.back)}" placeholder="예: WEST"></label>
           <label class="f">티<input id="fTee" list="teeList" value="${esc(r.tee || "")}"></label>
           <label class="f">지역<select id="fRegion"><option value="">선택</option>${Regions.NAMES.map((n) => `<option ${n === (r.region || Regions.suggest(r.course, rounds)) ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+          <label class="f">티오프 시간<input id="fTime" type="time" value="${esc(r.time || "")}"></label>
+          <label class="f">유형<select id="fKind"><option value="">개인 라운드</option><option value="g:" data-name="" ${r.kind === "group" && !r.groupId ? "selected" : ""}>모임 라운드</option>${r.kind === "group" && r.groupId ? `<option value="g:${esc(r.groupId)}" data-name="${esc(r.group || "")}" selected>모임: ${esc(r.group || "")}</option>` : ""}</select></label>
           <label class="f">날씨·컨디션·메모<input id="fMemo" value="${esc(r.memo)}"></label>
         </div>
         <datalist id="courseList">${courses.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
         <datalist id="teeList">${tees.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
         <div class="row" style="margin-top:10px"><button class="btn ghost" id="bCourseDB" type="button">⛳ 골프장 정보 불러오기 (Par·핸디캡·거리·공략)</button><button class="btn ghost" id="bCourseReq" type="button">🔎 새 골프장 정보 요청</button><button class="btn ghost" id="bCourse" type="button">이전 라운드 코스 정보 불러오기</button></div>
         <div id="reqBox"></div>
-        <p class="legend-note">「골프장 정보」는 골프장 홈페이지에서 옮겨 둔 코스 자료입니다${courseDB.length ? ` — 지금 등록: ${esc(courseChoices().join(", "))}` : ""}. 골프장·전반/후반 코스·티를 먼저 적고 누르세요. 없는 골프장은 「새 골프장 정보 요청」에 홈페이지 주소를 남기고 Claude Code에서 「골프장 요청 처리해줘」라고 하면 등록됩니다. 라운드 전에 스코어 없이 저장하면 <b>예정 라운드</b>로 등록되어 홈과 라운드 목록에서 홀별 공략을 볼 수 있습니다.</p>
+        <p class="legend-note">「골프장 정보」는 골프장 홈페이지에서 옮겨 둔 코스 자료입니다${courseDB.length ? ` — 지금 등록: ${esc(courseChoices().join(", "))}` : ""}. 골프장·전반/후반 코스·티를 먼저 적고 누르세요. 없는 골프장은 「새 골프장 정보 요청」에 홈페이지 주소를 남기면 관리자가 확인해 등록합니다. 라운드 전에 스코어 없이 저장하면 <b>예정 라운드</b>로 등록되어 홈과 라운드 목록에서 홀별 공략을 볼 수 있습니다.</p>
       </div>
 
       <div class="holenav" id="holeNav"></div>
@@ -836,23 +856,34 @@
       <div id="preview"></div>
       <div class="totals" id="totals"></div>
 
+      <h3>👥 동반자 스코어 <span class="muted">직접 입력 · 붙여넣기 · 스코어카드 사진으로 읽기</span></h3>
+      <div class="card" id="compEdIn"></div>
+
       <h3>라운드 사진·동영상 <span class="muted">추억 남기기 · 개수 제한 없음</span></h3>
       <div class="card">
         <div class="row"><label class="btn ghost filebtn">📷 사진·동영상 추가<input type="file" accept="image/*,video/*" multiple id="fPhotos" hidden></label><span class="muted" id="phInfo"></span></div>
         <div id="phList"></div>
-        <p class="legend-note">여러 개를 한 번에 골라도 되고 여러 번 추가해도 됩니다. 「GitHub에 저장」 때 <b>공개 저장소</b>에 함께 올라갑니다. 사진은 긴 변 1600px로 줄이고 촬영 위치 등 사진 속 정보를 지웁니다. <b>동영상은 줄이지 않고 그대로 올리므로 한 개 50MB까지</b>입니다(휴대폰 영상 약 20~30초) — 스윙·퍼트 장면만 잘라서 올리세요. 동영상은 이 기기 임시 저장에 들어가지 않으니 저장 직전에 고르는 것을 권장합니다. 사람 얼굴이 나온 사진·영상은 공개돼도 괜찮은지 확인해 주세요.</p>
+        <p class="legend-note">여러 개를 한 번에 골라도 되고 여러 번 추가해도 됩니다. 「저장」 때 ${SRV ? "서버에 함께 올라가며 <b>나만</b> 볼 수 있습니다" : "<b>공개 저장소</b>에 함께 올라갑니다"}. 사진은 긴 변 1600px로 줄이고 촬영 위치 등 사진 속 정보를 지웁니다. <b>동영상은 줄이지 않고 그대로 올리므로 한 개 50MB까지</b>입니다(휴대폰 영상 약 20~30초) — 스윙·퍼트 장면만 잘라서 올리세요. 동영상은 이 기기 임시 저장에 들어가지 않으니 저장 직전에 고르는 것을 권장합니다. 사람 얼굴이 나온 사진·영상은 공개돼도 괜찮은지 확인해 주세요.</p>
       </div>
-      <div class="row" style="margin-top:14px">
-        <button class="btn" id="bSave" type="button" ${G.canWrite() ? "" : "disabled"}>GitHub에 저장</button>
+      <div class="savebar">
+        <span class="sb-info" id="sbInfo"></span>
         <a class="btn ghost" href="${edit ? "#/round/" + encodeURIComponent(edit.id) : "#/rounds"}">취소</a>
+        <button class="btn" id="bSave" type="button" ${G.canWrite() ? "" : "disabled"}>저장</button>
       </div>
-      <p class="legend-note">중간에 저장해도 됩니다. 나중에 「수정」으로 이어서 입력할 수 있습니다.</p>
+      <p class="legend-note">아래 「저장」 한 번에 <b>홀 기록·동반자 스코어·사진</b>이 함께 저장됩니다. 중간에 저장해도 되고, 나중에 「수정」으로 이어서 입력할 수 있습니다.</p>
       <div id="guideBox" style="margin-top:18px"></div>`;
 
     const $ = (s) => document.getElementById(s);
-    const meta = () => ({ date: $("fDate").value, course: $("fCourse").value.trim(), front: $("fFront").value.trim(), back: $("fBack").value.trim(), tee: $("fTee").value.trim(), region: $("fRegion").value, memo: $("fMemo").value.trim() });
+    // 유형: 「개인」 또는 「모임: 이름」(내 모임 목록에서 고름). 모임이면 kind/group/groupId 를 저장
+    const kindMeta = () => {
+      const v = $("fKind").value;
+      if (!v.startsWith("g:")) return { kind: "personal", group: "", groupId: "" };
+      const opt = $("fKind").selectedOptions[0];
+      return { kind: "group", groupId: v.slice(2), group: opt.dataset.name ?? "" };
+    };
+    const meta = () => ({ date: $("fDate").value, time: $("fTime").value, course: $("fCourse").value.trim(), front: $("fFront").value.trim(), back: $("fBack").value.trim(), tee: $("fTee").value.trim(), region: $("fRegion").value, memo: $("fMemo").value.trim(), ...kindMeta() });
     const holesArr = () => Object.values(H).map((h) => Object.fromEntries(Object.entries(h).filter(([, v]) => v !== "" && v !== null && v !== undefined))).filter((h) => Object.keys(h).length > 1);
-    const saveDraft = () => ls.set(draftKey, { ...meta(), id: edit?.id, holes: holesArr() });
+    const saveDraft = () => ls.set(draftKey, { ...meta(), id: edit?.id, holes: holesArr(), companions: compSt.comps.filter((c) => c.name.trim()).map(cleanComp) });
 
     function field([k, lab, type, opts]) {
       const v = H[cur][k];
@@ -871,36 +902,72 @@
       const auto = AUTO[cur].has(k) && v !== undefined;
       return `<label class="f ${k === "score" ? "key" : ""} ${k === "memo" ? "wide" : ""} ${auto ? "auto" : ""}">${lab}${auto ? ` <span class="autotag">자동</span>` : ""}${ctl}${HINT[k] ? `<span class="hint">${HINT[k]}</span>` : ""}</label>`;
     }
+    // 홀 카드: 위에는 코스 정보(글자) → 꼭 넣을 것(Score·Putts)과 있을 때만(티샷·벌타)은 버튼 한 번 → 나머지는 「자세히」에 접어 둔다
+    const SC_NAME = { "-3": "알바", "-2": "이글", "-1": "버디", 0: "파", 1: "보기", 2: "더블", 3: "트리플" };
+    const TEE_BTN = [["-", "FW"], ["L", "L 왼쪽"], ["R", "R 오른쪽"], ["H", "H 훅"], ["S", "S 슬라이스"]];
+    const MORE_KEYS = ["dist", "hcp", "drive", "ong", "fp", "gmiss", "appr", "bunker", "sg", "memo"];
+    let showMore = false, editCourse = false;
+    function setVal(k, raw) {
+      const before = isNum(H[cur].score) && !AUTO[cur].has("score") && isNum(H[cur].putts) && !AUTO[cur].has("putts");
+      H[cur][k] = raw === "" || raw === undefined ? undefined : TEXT_KEYS.has(k) ? String(raw).trim() : k === "dist" || k === "drive" ? Math.round(Number(raw)) : Number(raw);
+      AUTO[cur].delete(k);   // 직접 고친 칸은 자동 계산 대상에서 뺀다
+      if (k === "par" && H[cur].par === 3) for (const t of TEE_ONLY) { delete H[cur][t]; AUTO[cur].delete(t); }
+      autoFill(cur);
+      saveDraft();
+      const after = isNum(H[cur].score) && !AUTO[cur].has("score") && isNum(H[cur].putts) && !AUTO[cur].has("putts");
+      // Score·Putts 두 개를 막 다 넣었으면 잠깐 보여 주고 다음 홀로(이미 넣었던 홀을 고칠 때는 그대로)
+      if (!before && after && ["score", "putts"].includes(k) && cur < 18) {
+        drawAll(true);
+        const at = cur;
+        setTimeout(() => { if (cur === at) { cur = at + 1; drawAll(true); window.scrollTo({ top: $("holeNav").getBoundingClientRect().top + window.scrollY - 70, behavior: "smooth" }); } }, 450);
+        return;
+      }
+      drawAll(true);
+    }
+    function btns(k, opts, label = (o) => o) {
+      const v = H[cur][k];
+      return `<div class="hbtns" data-bk="${k}">${opts.map((o) => `<button type="button" class="hb ${String(v) === String(o) ? "on" : ""} ${k === "score" && isNum(o) ? (o < 0 ? "sc-m2" : o === 0 ? "sc-0" : o === 1 ? "sc-1" : o === 2 ? "sc-2" : "sc-3") : ""}" data-v="${esc(String(o))}">${label(o)}</button>`).join("")}</div>`;
+    }
+    const row = (lab, html, opt) => `<div class="hrow"><div class="hrow-l">${lab}${opt ? ` <span class="muted">${opt}</span>` : ""}</div><div class="hrow-r">${html}</div></div>`;
     function drawCard() {
       const h = H[cur];
       const gir = S.holeGir(h);
+      const c = courseHoles(meta())?.holes.find((x) => x.h === cur);
+      const info = [isNum(h.par) ? `Par <b>${h.par}</b>` : "", isNum(h.hcp) ? `핸디캡 ${h.hcp}` : "", isNum(h.dist) ? `${h.dist}m` : ""].filter(Boolean).join(" · ");
+      const needPar = !isNum(h.par) || editCourse;
+      const moreFields = FLAT.filter(([k]) => MORE_KEYS.includes(k));
+      const moreFilled = moreFields.filter(([k]) => h[k] !== undefined && h[k] !== "" && !AUTO[cur].has(k) && !["dist", "hcp"].includes(k)).length;
       $("holeCard").innerHTML = `
         <div class="row" style="justify-content:space-between;align-items:baseline">
           <div class="hc-title">${cur}번 홀 <span class="muted">${cur <= 9 ? "전반" : "후반"}</span></div>
           <div class="muted">${isNum(h.par) && isNum(h.score) ? `타수 <b>${h.par + h.score}</b>` : ""} ${gir === null ? "" : `· GIR ${gir ? "○" : "×"}`} ${S.holeCheck(h) ? `<span class="ng"> · 온그린+퍼트 ≠ 타수</span>` : ""}</div>
         </div>
+        <div class="hinfo">${info ? `⛳ ${info}` : `<span class="muted">코스 정보 없음 — 위 「골프장 정보 불러오기」를 누르거나 Par를 고르세요</span>`}${isNum(h.par) ? ` <button type="button" class="link" id="bEditCourse">${editCourse ? "닫기" : "수정"}</button>` : ""}</div>
         ${(() => {
           const p = Clubs.plan(h.par, h.dist, Clubs.bag(settings));
-          const c = courseHoles(meta())?.holes.find((x) => x.h === cur);
-          const tip = c ? `<div class="plan">📍 <b>코스 공략</b> <span class="muted">${isNum(c.dist) ? `${c.dist}m${isNum(c.distR) ? ` (다른 그린 ${c.distR}m)` : ""}` : ""}</span> ${esc(c.tip || "")}${c.map ? ` <button type="button" class="link" data-map="${cur}">🗺 홀 그림</button>` : ""}</div>` : "";
-          if (p) return `<div class="plan">🏌️ <b>공략 가이드</b> <span class="muted">(추정)</span> ${p.text}</div>` + tip;
-          return (isNum(h.par) ? `<div class="plan muted">거리를 넣으면 내 클럽 거리로 공략 가이드가 나옵니다</div>` : "") + tip;
+          const tip = c ? `<div class="plan">📍 <b>코스 공략</b> ${esc(c.tip || "")}${isNum(c.distR) ? ` <span class="muted">(다른 그린 ${c.distR}m)</span>` : ""}${c.map ? ` <button type="button" class="link" data-map="${cur}">🗺 홀 그림</button>` : ""}</div>` : "";
+          return (p ? `<div class="plan">🏌️ <b>공략 가이드</b> <span class="muted">(추정)</span> ${p.text}</div>` : "") + tip;
         })()}
-        ${FIELDS.map(([g, fs]) => `<div class="fgroup"><div class="fg-title">${g}</div><div class="form">${fs.map(field).join("")}</div></div>`).join("")}`;
+        <div class="hquick">
+          ${needPar ? row("Par", btns("par", [3, 4, 5, 6])) : ""}
+          ${row("Score", btns("score", [-3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8], (o) => `${o > 0 ? "+" + o : o}${SC_NAME[o] ? `<small>${SC_NAME[o]}</small>` : ""}`))}
+          ${row("Putts", btns("putts", [0, 1, 2, 3, 4, 5]))}
+          ${isNum(h.par) && h.par === 3 ? "" : row("티샷", btns("miss", TEE_BTN.map((x) => x[0]), (o) => TEE_BTN.find((x) => x[0] === o)[1]), "선택")}
+          ${row("벌타", btns("pen", [0, 1, 2, 3, 4]) + `<span class="hrow-l2">OB</span>` + btns("ob", [0, 1, 2, 3]), "있을 때만")}
+        </div>
+        <details class="hmore" ${showMore ? "open" : ""}><summary>자세히 <span class="muted">거리·온그린·퍼트 거리·그린 미스·벙커·메모${moreFilled ? ` · ${moreFilled}개 입력` : ""}</span></summary>
+          <div class="form">${moreFields.map(field).join("")}</div>
+        </details>
+        <p class="legend-note">Score·Putts를 넣으면 다음 홀로 넘어갑니다. 티샷·벌타는 있었을 때만 누르세요(벌타·OB는 기본 0). 같은 버튼을 다시 누르면 지워집니다.</p>`;
       bindHoleMaps(meta(), $("holeCard"));
-      $("holeCard").querySelectorAll("[data-k]").forEach((el) => {
-        el.addEventListener("change", () => {
-          const k = el.dataset.k;
-          const raw = el.value;
-          H[cur][k] = raw === "" ? undefined : TEXT_KEYS.has(k) ? raw.trim() : k === "dist" || k === "drive" ? Math.round(Number(raw)) : Number(raw);
-          AUTO[cur].delete(k);   // 직접 고친 칸은 자동 계산 대상에서 뺀다
-          if (k === "par" && H[cur].par === 3) for (const t of TEE_ONLY) { delete H[cur][t]; AUTO[cur].delete(t); }
-          const filled = autoFill(cur);
-          saveDraft();
-          // 스코어·퍼트·온그린 타수는 서로 계산하므로 고칠 때마다 카드를 다시 그려 「자동」 표시와 ≠ 경고를 맞춘다
-          drawAll(k === "par" || filled || ["score", "putts", "ong"].includes(k));
-        });
-      });
+      $("holeCard").querySelector("details.hmore").addEventListener("toggle", (e) => (showMore = e.target.open));
+      const be = $("bEditCourse"); if (be) be.onclick = () => { editCourse = !editCourse; if (editCourse) showMore = true; drawCard(); };
+      $("holeCard").querySelectorAll("[data-bk]").forEach((g) => g.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+        const k = g.dataset.bk, v = b.dataset.v;
+        const same = String(H[cur][k]) === v && !AUTO[cur].has(k);
+        setVal(k, same ? "" : v);
+      })));
+      $("holeCard").querySelectorAll("[data-k]").forEach((el) => el.addEventListener("change", () => setVal(el.dataset.k, el.value)));
     }
     function drawNav() {
       $("holeNav").innerHTML = Array.from({ length: 18 }, (_, i) => {
@@ -931,9 +998,31 @@
         $("holeNav").scrollIntoView({ behavior: "smooth", block: "start" });
       }));
     }
-    function drawAll(card = true) { drawNav(); if (card) drawCard(); drawPreview(); drawGuide(); }
+    // 떠 있는 저장 줄: 지금까지 넣은 것을 한 줄로
+    function drawSaveInfo() {
+      const hs = holesArr().filter((h) => isNum(h.score));
+      const over = S.sum(hs.map((h) => h.score));
+      const nc = compSt.comps.length, np = photoSt.photos.length + compSt.photos.length;
+      $("sbInfo").innerHTML = `${hs.length ? `<b>${hs.length}홀</b> ${sgn(over, 0)}` : "홀 기록 없음"}${nc ? ` · 동반자 ${nc}명` : ""}${np ? ` · 사진 ${np}` : ""}`;
+    }
+    function syncCompPars() {
+      for (const k of Object.keys(compPars)) delete compPars[k];
+      for (const h of Object.values(H)) if (isNum(h.par)) compPars[h.h] = h.par;
+    }
+    function drawAll(card = true) { drawNav(); if (card) drawCard(); drawPreview(); drawGuide(); syncCompPars(); drawSaveInfo(); }
+    syncCompPars();
+    companionEditor($("compEdIn"), compSt, compPars, () => { saveDraft(); drawSaveInfo(); });
     drawAll();
-    ["fDate", "fCourse", "fFront", "fBack", "fTee", "fRegion", "fMemo"].forEach((x) => $(x).addEventListener("input", saveDraft));
+    ["fDate", "fTime", "fCourse", "fFront", "fBack", "fTee", "fRegion", "fMemo", "fKind"].forEach((x) => $(x).addEventListener("input", saveDraft));
+    // 유형 목록: 내가 들어간 모임(서버판2). 고른 값(편집·임시 저장)은 유지
+    if (G.api) G.api("GET", "/api/groups").then(({ groups }) => {
+      const sel = $("fKind");
+      if (!sel) return;
+      const curV = sel.value;
+      sel.innerHTML = `<option value="">개인 라운드</option><option value="g:" data-name="">모임 라운드</option>` + groups.map((g) => `<option value="g:${g.id}" data-name="${esc(g.name)}">모임: ${esc(g.name)}</option>`).join("")
+        + (r.kind === "group" && r.groupId && !groups.some((g) => String(g.id) === String(r.groupId)) ? `<option value="g:${esc(r.groupId)}" data-name="${esc(r.group || "")}">모임: ${esc(r.group || "")} (나간 모임)</option>` : "");
+      sel.value = curV;
+    }).catch(() => {});
     ["fCourse", "fFront", "fBack", "fTee"].forEach((x) => $(x).addEventListener("change", () => { drawGuide(); drawCard(); }));
     // 골프장을 바꾸면 지역을 그 골프장의 최근 지역으로 맞춘다. 지역을 직접 고른 뒤에는 건드리지 않는다.
     let regionTouched = !!r.region;
@@ -1023,13 +1112,18 @@
     $("bSave").onclick = async () => {
       const m = meta();
       const hs = holesArr();
-      if (!m.date || !m.course) return toast("날짜와 골프장을 입력하세요.");
+      if (!m.date || !m.course) { toast("날짜와 골프장을 입력하세요."); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+      const cBad = compProblem(compSt);
+      if (cBad) { toast(cBad, 4000); $("compEdIn").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
       // 스코어가 하나도 없으면 라운드 전 「예정 라운드」로 저장(코스 정보만). 스코어를 넣으면 일반 라운드가 된다
       const planned = !hs.some((h) => isNum(h.score));
       if (planned && !hs.some((h) => isNum(h.par))) return toast("스코어를 한 홀 이상 입력하세요(라운드 전이면 Par·거리만 넣어 예정 라운드로 저장할 수 있습니다).", 5000);
       // 수정할 때 입력 화면에 없는 값(티오프 시간 등)은 그대로 둔다
       const obj = { ...(edit || {}), id: edit ? edit.id : "r" + m.date.replaceAll("-", "") + "-" + Date.now().toString(36), ...m, holes: hs };
       if (planned) obj.planned = true; else delete obj.planned;
+      const comps = compSt.comps.map(cleanComp);
+      if (comps.length) obj.companions = comps; else delete obj.companions;
+      photoSt.photos.push(...compSt.photos.splice(0));
       $("bSave").disabled = true;
       $("bSave").textContent = "저장 중…";
       try {
@@ -1043,15 +1137,15 @@
           return data.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         }, `${planned ? "예정 라운드" : edit ? "라운드 수정" : "라운드 추가"}: ${m.date} ${m.course}`);
         for (const p of photoSt.removed) await G.deleteFile(p, `사진 삭제: ${what}`).catch(() => null);
-        if (ph.errs.length) toast("사진은 저장했지만 다른 저장소 동기화 실패: " + ph.errs.join(" / "), 6000);
+        if (ph.errs.length) toast("일부 사진을 저장하지 못했습니다: " + ph.errs.join(" / "), 6000);
         ls.del(draftKey);
         ls.del(photoKey);
-        toast(planned ? "예정 라운드로 저장했습니다. 라운드가 끝나면 「스코어 입력」으로 이어서 넣으세요." : "GitHub에 저장했습니다.", 4000);
+        toast(planned ? "예정 라운드로 저장했습니다. 라운드가 끝나면 「스코어 입력」으로 이어서 넣으세요." : "저장했습니다.", 4000);
         location.hash = "#/round/" + encodeURIComponent(obj.id);
       } catch (e) {
         toast(e.message, 6000);
         $("bSave").disabled = false;
-        $("bSave").textContent = "GitHub에 저장";
+        $("bSave").textContent = "저장";
       }
     };
   }
@@ -1140,8 +1234,8 @@
       const on = isNum(h.ong) ? h.ong : isNum(h.par) && isNum(h.score) && isNum(h.putts) ? h.par + h.score - h.putts : null;
       const scr = g === 0 && isNum(h.score) && h.score <= 0;
       const marks = [h.par > 3 && h.fw === 1 ? `<i class="hl-fw" title="티샷 페어웨이">■</i>` : "", g === 1 ? `<i class="hl-gir" title="GIR">●</i>` : "", isNum(h.bunker) && h.bunker > 0 ? `<i class="hl-bk" title="벙커샷 ${h.bunker}">B</i>` : ""].join("");
-      const pen = h.pen ? `${h.pen}${h.ob ? `<span class="muted"> OB${h.ob > 1 ? h.ob : ""}</span>` : ""}` : "";
-      return `<tr><td>${parMark(h.par)}${n}</td><td>${h.par ?? ""}</td><td>${scMark(h.score)}</td><td class="nw">${on !== null && isNum(h.putts) ? `${on}-${h.putts}` : isNum(h.putts) ? `-${h.putts}` : ""}${scr ? `<b class="hl-s" title="스크램블 성공">s</b>` : ""}</td>${showFp ? `<td>${isNum(h.fp) && h.fp > 0 ? h.fp + "m" : ""}</td>` : ""}<td class="nw">${marks}</td>${showPen ? `<td>${pen}</td>` : ""}</tr>${h.memo ? `<tr class="hl-memo"><td></td><td colspan="${cols - 1}">${esc(h.memo)}</td></tr>` : ""}`;
+      const pen = isNum(h.pen) && h.pen ? `${h.pen}${isNum(h.ob) && h.ob ? `<span class="muted"> OB${h.ob > 1 ? h.ob : ""}</span>` : ""}` : "";
+      return `<tr><td>${parMark(h.par)}${n}</td><td>${isNum(h.par) ? h.par : ""}</td><td>${scMark(h.score)}</td><td class="nw">${on !== null && isNum(h.putts) ? `${on}-${h.putts}` : isNum(h.putts) ? `-${h.putts}` : ""}${scr ? `<b class="hl-s" title="스크램블 성공">s</b>` : ""}</td>${showFp ? `<td>${isNum(h.fp) && h.fp > 0 ? h.fp + "m" : ""}</td>` : ""}<td class="nw">${marks}</td>${showPen ? `<td>${pen}</td>` : ""}</tr>${h.memo ? `<tr class="hl-memo"><td></td><td colspan="${cols - 1}">${esc(h.memo)}</td></tr>` : ""}`;
     };
     const sec = (a) => `<tr class="hl-half"><td colspan="${cols}">${halfName(r, a, true)}</td></tr>${Array.from({ length: 9 }, (_, i) => row(a + i)).join("")}`;
     return `<div class="tbl-wrap"><table class="holelist"><thead><tr><th>홀</th><th>Par</th><th>Sc.</th><th>On-Putt</th>${showFp ? "<th>1st</th>" : ""}<th>FW·GIR</th>${showPen ? "<th>벌타</th>" : ""}</tr></thead><tbody>${sec(1)}${sec(10)}</tbody></table></div>
@@ -1150,11 +1244,11 @@
 
   // ───────────── 라운드 사진·동영상 ─────────────
   // 동영상도 사진과 같은 목록(r.photos)에 경로로 저장하고 확장자로 구분한다. 사진처럼 줄일 수 없어 한 개 크기를 제한한다
-  // (GitHub API는 파일당 100MB까지, 50MB가 넘으면 경고 — 저장소가 커지면 사이트도 느려진다)
+  // (서버 업로드는 한 개 50MB까지 — nginx·WAS 제한과 맞춤)
   const VIDEO_MAX = 50 * 1024 * 1024;
   const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i;
   const isVideo = (p) => (typeof p === "string" ? VIDEO_EXT.test(p) : !!p.video || VIDEO_EXT.test(p.path || ""));
-  // 저장한 동영상은 배포본(올바른 동영상 형식으로 내려 줌)을 먼저, 아직 배포 전이면 저장소 원본으로
+  // 저장한 동영상 주소(서버 미디어)
   const videoSrcs = (path) => [path, G.mediaUrl(path)];
   // 보기 창에 넘길 항목: 사진은 주소 문자열, 동영상은 {video, srcs}
   const mediaItem = (p) => (isVideo(p) ? { video: true, srcs: p.path || typeof p === "string" ? videoSrcs(p.path || p) : [p.dataUrl] } : p.dataUrl || G.mediaUrl(p.path || p));
@@ -1208,7 +1302,7 @@
   }
 
   // ───────────── 동반자·사진 ─────────────
-  // 가려진 이름(홍*동) → 내가 고친 이름. 이 기기에만 기억한다(공개 저장소에는 올리지 않음).
+  // 가려진 이름(홍*동) → 내가 고친 이름. 이 기기에만 기억한다(서버에는 올리지 않음).
   const KEY_ALIAS = KEY_DRAFT.split(".")[0] + ".alias.v1";
   const parsOf = (r) => Object.fromEntries((r.holes || []).filter((h) => isNum(h.par)).map((h) => [h.h, h.par]));
   function applyAlias(list) {
@@ -1328,10 +1422,11 @@
     const changed = () => { onChange(); draw(); };
     // 전반·후반·합계 타수 아래에 Par 대비 오버(그 구간 Par를 모두 알 때만)
     const parSum = (a, b) => { const xs = Array.from({ length: b - a + 1 }, (_, k) => pars[a + k]); return xs.every(isNum) ? S.sum(xs) : null; };
-    const PS = { front: parSum(1, 9), back: parSum(10, 18), total: parSum(1, 18) };
+    let PS = {};
     const overOf = (v, k) => (isNum(v) && isNum(PS[k]) ? `<br><span class="${v - PS[k] > 0 ? "ng" : "ok"}" style="font-size:12px">${sgn(v - PS[k], 0)}</span>` : "");
     function draw() {
       holeGrid.pars = pars;
+      PS = { front: parSum(1, 9), back: parSum(10, 18), total: parSum(1, 18) };
       const bad = st.comps.some((c) => c.name.startsWith("이름?"));
       box.innerHTML = `
         <div class="tbl-wrap"><table><thead><tr><th class="l">이름(별명)</th><th>전반<br><span class="muted">오버</span></th><th>후반<br><span class="muted">오버</span></th><th>총타수<br><span class="muted">오버</span></th><th>홀 기록</th><th></th></tr></thead>
@@ -1342,17 +1437,17 @@
             ${["front", "back", "total"].map((k) => { const ov = overOf(s[k], k); return hasH ? `<td><b>${s[k] ?? "-"}</b>${ov}</td>` : `<td><input data-cv="${i}" data-k="${k}" type="number" inputmode="numeric" value="${isNum(c[k]) ? c[k] : ""}" style="width:64px">${ov}</td>`; }).join("")}
             <td>${hasH ? s.holeCount + "홀" : "-"}<br><button class="link" data-hopen="${i}" type="button">${st.openH === i ? "입력 닫기" : hasH ? "홀 점수 수정" : "홀 점수 입력"}</button></td><td><button class="link" data-cdel="${i}" type="button">삭제</button></td></tr>`;
         }).join("") : `<tr><td colspan="6" class="muted">아직 동반자가 없습니다.</td></tr>`}</tbody></table></div>
-        <p class="legend-note${bad ? " ng" : ""}">${bad ? "사진에서 이름을 읽지 못한 동반자(<b>이름?</b>)는 이름을 적어 주세요. " : ""}저장소가 공개라 실명 대신 <b>별명·이니셜</b>이나 <b>*로 가린 이름</b>(예: 홍*동)을 권장합니다.</p>
+        <p class="legend-note${bad ? " ng" : ""}">${bad ? "사진에서 이름을 읽지 못한 동반자(<b>이름?</b>)는 이름을 적어 주세요. " : ""}${SRV ? "동반자 이름은 실명 대신 <b>별명·이니셜</b>이나 <b>*로 가린 이름</b>(예: 홍*동)도 좋습니다." : "저장소가 공개라 실명 대신 <b>별명·이니셜</b>이나 <b>*로 가린 이름</b>(예: 홍*동)을 권장합니다."}</p>
         ${isNum(st.openH) && st.comps[st.openH] ? holeGrid(st.comps[st.openH], st.openH) : ""}
         <div class="row" style="margin-top:6px"><button class="btn ghost" data-act="addH" type="button">+ 홀별로 직접 추가</button><button class="btn ghost" data-act="add" type="button">+ 스코어만 추가</button></div>
         <h4>붙여넣기로 추가</h4>
         <textarea class="pastebox small" data-act="text" placeholder="한 줄에 한 명. 예)&#10;철수 85&#10;영희 42 45&#10;홍*동 5 4 6 5 4 5 3 5 6 4 5 4 6 5 4 3 5 6&#10;(타수 또는 +/-, 끝에 합계 칸이 있어도 됩니다)">${esc(st.text)}</textarea>
         <div class="row" style="margin-top:6px"><button class="btn ghost" data-act="parse" type="button">읽어서 추가</button></div>
-        <h4>사진</h4>
-        <div class="row"><label class="btn ghost filebtn">📷 사진 선택<input type="file" accept="image/*" multiple data-act="file" hidden></label>
+        <h4>스코어카드 사진으로 점수 읽기</h4>
+        <div class="row"><label class="btn ghost filebtn">📷 스코어카드 사진 선택<input type="file" accept="image/*" multiple data-act="file" hidden></label>
           <label class="chk"><input type="checkbox" data-act="ocr" ${st.ocr === false ? "" : "checked"}> 사진에서 점수 읽기</label>
           <label class="chk"><input type="checkbox" data-act="keep" ${st.keep === false ? "" : "checked"}> 라운드에 사진 저장</label></div>
-        <p class="legend-note">점수 읽기는 사진 속 글자를 <b>이 기기에서</b> 읽어 동반자 「이름·점수」를 바로 넣습니다(처음 한 번 인식 데이터를 받느라 시간이 걸림). 손글씨·흐린 사진은 틀리기 쉬우니 숫자를 확인하고, 이상하면 읽은 글이 들어간 붙여넣기 칸을 고쳐 「읽어서 추가」를 누르세요. 저장한 사진은 공개 저장소에 올라가며, 촬영 위치 등 사진 속 정보는 지우고 올립니다.</p>
+        <p class="legend-note">점수 읽기는 사진 속 글자를 <b>이 기기에서</b> 읽어 동반자 「이름·점수」를 바로 넣습니다(처음 한 번 인식 데이터를 받느라 시간이 걸림). 손글씨·흐린 사진은 틀리기 쉬우니 숫자를 확인하고, 이상하면 읽은 글이 들어간 붙여넣기 칸을 고쳐 「읽어서 추가」를 누르세요. 저장한 사진은 ${SRV ? "서버에 나만 볼 수 있게" : "공개 저장소에"} 올라가며, 촬영 위치 등 사진 속 정보는 지우고 올립니다.</p>
         <div class="ocr-msg" data-act="msg"></div>
         ${st.photos.length ? `<div class="photos">${st.photos.map((p, i) => `<div class="ph">${thumb(p, i)}${p.dataUrl ? `<span class="ph-new">저장 전</span>` : ""}<button type="button" class="ph-x" data-pdel="${i}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}`;
       const q = (s) => box.querySelector(s);
@@ -1427,7 +1522,7 @@
     const comps = st.comps.map(cleanComp);
     await commit((data) => data.map((x) => (x.id === r.id ? { ...x, companions: comps.length ? comps : undefined, photos: paths.length ? paths : undefined } : x)), `동반자·사진 저장: ${what}`);
     for (const p of st.removed) await G.deleteFile(p, `사진 삭제: ${what}`).catch(() => null);
-    if (errs.length) toast("사진은 저장했지만 다른 저장소 동기화 실패: " + errs.join(" / "), 6000);
+    if (errs.length) toast("일부 사진을 저장하지 못했습니다: " + errs.join(" / "), 6000);
   }
 
   // 인사이트: 동반자별 전적(18홀 총타수끼리 비교)
@@ -1482,7 +1577,7 @@
     const rawFmt = (k, v) => (!isNum(v) ? "-" : ["fw", "gir", "scr"].includes(k) ? pct(v) : k === "pph" ? v.toFixed(2) + "개" : k === "p3" ? v.toFixed(1) + "개" : k === "fp" ? v.toFixed(1) + "m" : v.toFixed(1) + "타");
     app.innerHTML = `
       <div class="row" style="justify-content:space-between">
-        <h2>${dot(r.date)} ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join(" / "))}${r.tee ? " · " + esc(r.tee) : ""}${r.region ? " · 📍" + esc(r.region) : ""}</span></h2>
+        <h2>${dot(r.date)} ${esc(r.course)} <span class="muted">${esc([r.front, r.back].filter(Boolean).join(" / "))}${r.tee ? " · " + esc(r.tee) : ""}${r.region ? " · 📍" + esc(r.region) : ""}${r.time ? " · ⏰" + esc(r.time) : ""}${r.kind === "group" ? " · 👥" + esc(r.group || "모임") : ""}</span></h2>
         <div class="row"><a class="btn ghost" href="#/edit/${encodeURIComponent(r.id)}">수정</a><button class="btn danger" id="bDel" type="button" ${G.canWrite() ? "" : "disabled"}>삭제</button></div>
       </div>
       <div class="kpis">
@@ -1511,7 +1606,7 @@
       ${courseHoles(r) ? `<details class="card" style="margin-top:12px"><summary><b>홀별 야디지 · 공략</b> <span class="muted">${esc(r.course)} 코스 정보</span></summary>${courseGuide(r)}</details>` : ""}
       <h3>동반자 비교 <span class="muted">${(r.companions || []).length ? (r.companions || []).length + "명" : "없음"}</span></h3>
       ${companionCompare(r) || `<p class="muted">함께 친 동반자의 점수를 넣으면 순위·홀별로 비교합니다.</p>`}
-      <div class="row" style="margin-top:10px"><button class="btn ghost" id="bComp" type="button">👥 동반자·사진 ${(r.companions || []).length || (r.photos || []).length ? "편집" : "추가"}</button></div>
+      <div class="row" style="margin-top:10px"><button class="btn ghost" id="bComp" type="button">👥 동반자 스코어 ${(r.companions || []).length ? "수정" : "입력"} <span class="muted">(사진으로 읽기 가능)</span></button></div>
       <div id="compBox"></div>
       <div id="delBox"></div>
       <p><a href="#/rounds">← 목록으로</a></p>`;
@@ -1542,21 +1637,21 @@
     document.getElementById("bComp").onclick = () => {
       const box = document.getElementById("compBox");
       const st = newEditState(r);
-      box.innerHTML = `<div class="card" style="margin-top:10px"><h3 class="mt0">동반자·사진 편집</h3><div id="compEd"></div>
-        <div class="row" style="margin-top:12px"><button class="btn" id="bCompSave" type="button" ${G.canWrite() ? "" : "disabled"}>GitHub에 저장</button><button class="btn ghost" id="bCompCancel" type="button">닫기</button></div></div>`;
+      box.innerHTML = `<div class="card" style="margin-top:10px"><h3 class="mt0">동반자 스코어 <span class="muted">직접 입력 · 붙여넣기 · 스코어카드 사진</span></h3><div id="compEd"></div>
+        <div class="row" style="margin-top:12px"><button class="btn" id="bCompSave" type="button" ${G.canWrite() ? "" : "disabled"}>저장</button><button class="btn ghost" id="bCompCancel" type="button">닫기</button></div></div>`;
       companionEditor(document.getElementById("compEd"), st, parsOf(r));
       document.getElementById("bCompCancel").onclick = () => (box.innerHTML = "");
       document.getElementById("bCompSave").onclick = async (e) => {
         const bad = compProblem(st);
         if (bad) { toast(bad, 4000); return; }
         e.target.disabled = true; e.target.textContent = "저장 중…";
-        try { await saveCompanions(r, st); toast("동반자·사진을 저장했습니다."); roundView(id); }
-        catch (err) { toast(err.message, 6000); e.target.disabled = false; e.target.textContent = "GitHub에 저장"; }
+        try { await saveCompanions(r, st); toast("동반자 스코어를 저장했습니다."); roundView(id); }
+        catch (err) { toast(err.message, 6000); e.target.disabled = false; e.target.textContent = "저장"; }
       };
       box.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     document.getElementById("bDel").onclick = () => {
-      document.getElementById("delBox").innerHTML = `<div class="notice">이 라운드를 GitHub에서 삭제할까요? <button class="btn danger" id="bDel2" type="button">삭제 확인</button></div>`;
+      document.getElementById("delBox").innerHTML = `<div class="notice">이 라운드를 삭제할까요? <button class="btn danger" id="bDel2" type="button">삭제 확인</button></div>`;
       document.getElementById("bDel2").onclick = async () => {
         try {
           await commit((data) => data.filter((x) => x.id !== id), `라운드 삭제: ${r.date} ${r.course}`);
@@ -1685,11 +1780,73 @@
   }
 
   // ───────────── 기록·동반자 (예전 「인사이트」: 다녀온 지역·동반자 전적·라운드 패턴) ─────────────
-  function insightsView() {
+  // 동반 기록: 동반자별 함께한 횟수·승패·평균 차(18홀 총타수 비교), 이름 고치기
+  function companionView(fr) {
+    app.innerHTML = `${head("companions")}
+      ${(() => {
+        const CR = companionRecords(fr);
+        if (!CR.length) return "";
+        return `<h2>동반자 전적 <span class="muted">18홀 총타수 비교 · 이름을 고치면 모든 라운드에 반영</span></h2>
+        <div class="tbl-wrap"><table><thead><tr><th class="l">동반자</th><th>함께</th><th>나의 승-패-무</th><th>내 평균</th><th>동반자 평균</th><th>평균 차</th><th>최근</th><th></th></tr></thead>
+        <tbody>${CR.map((x, i) => { const d = x.mine.length ? S.avg(x.theirs) - S.avg(x.mine) : null; return `<tr><td class="l"><b>${esc(x.name)}</b></td><td>${x.n}회</td><td>${x.mine.length ? `<b>${x.w}</b>-${x.l}-${x.t}` : "-"}</td><td>${f1(S.avg(x.mine))}</td><td>${f1(S.avg(x.theirs))}</td><td class="${isNum(d) ? (d > 0 ? "ok" : d < 0 ? "ng" : "") : ""}">${isNum(d) ? (d > 0 ? `내가 ${d.toFixed(1)}타 앞섬` : d < 0 ? `${(-d).toFixed(1)}타 뒤짐` : "같음") : "-"}</td><td>${dot(x.last)}</td><td><button class="link" data-rename="${i}" type="button" ${G.canWrite() ? "" : "disabled"}>이름 고치기</button></td></tr>`; }).join("")}</tbody></table></div>
+        <div id="renameBox"></div>`;
+      })()}
+      ${companionRecords(fr).length ? "" : `<p class="muted">동반자 점수를 기록한 라운드가 없습니다. 라운드 상세에서 동반자 점수를 넣을 수 있습니다.</p>`}`;
+    app.querySelectorAll("tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
+    // 동반자 이름 고치기: 그 이름이 들어간 모든 라운드를 한 번에 바꾼다
+    const CR = companionRecords(rounds);
+    const CRf = companionRecords(fr);
+    app.querySelectorAll("[data-rename]").forEach((b) => (b.onclick = () => {
+      const old = CRf[b.dataset.rename].name;
+      document.getElementById("renameBox").innerHTML = `<div class="notice" style="margin-top:8px">「${esc(old)}」 → <input id="rnNew" value="${esc(old)}" style="width:140px"> <button class="btn" id="rnGo" type="button">모든 라운드에서 바꾸기</button> <span class="muted">${(CR.find((x) => x.name === old) || { n: 0 }).n}개 라운드</span></div>`;
+      document.getElementById("rnGo").onclick = async () => {
+        const nv = document.getElementById("rnNew").value.trim();
+        if (!nv || nv === old) return;
+        try {
+          await commit((data) => data.map((r) => (r.companions && r.companions.some((c) => c.name === old) && !r.companions.some((c) => c.name === nv) ? { ...r, companions: r.companions.map((c) => (c.name === old ? { ...c, name: nv } : c)) } : r)), `동반자 이름 변경: ${old} → ${nv}`);
+          if (old.includes("*")) { const al = ls.get(KEY_ALIAS) || {}; al[old] = nv; ls.set(KEY_ALIAS, al); }
+          toast("이름을 바꿨습니다.");
+          insightsView("comp");
+        } catch (e) { toast(e.message, 6000); }
+      };
+    }));
+  }
+
+  // 라운드 인사이트(mode "insight") / 동반 기록(mode "comp") — 예전 「기록·동반자」를 두 탭으로 나눔
+  function insightsView(mode = "insight") {
     const fr = frounds();
     const A = S.analyze(fr, settings);
     const I = S.insights(A.rs);
     if (!I) { app.innerHTML = head("insights") + `<p class="muted">조건에 맞는 라운드가 없습니다.</p>`; return; }
+    if (mode === "comp") return companionView(fr);
+    // ── 라운드 인사이트 계산(참고: 패턴 도넛 · 리듬 히트맵 · 동기부여) ──
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const ymdL = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const todayS = ymdL(today);
+    const done = fr.filter((r) => !r.planned && r.date && r.date <= todayS);
+    const allDone = rounds.filter((r) => !r.planned && r.date && r.date <= todayS);
+    const wkEnd = done.filter((r) => [0, 6].includes(new Date(r.date + "T00:00:00").getDay())).length;
+    const timedN = done.filter((r) => /^\d{1,2}:\d{2}/.test(r.time || "")), amN = timedN.filter((r) => Number(r.time.split(":")[0]) < 12).length;
+    const donut = (id, title, a, b, la, lb, note) => {
+      const tot = a + b, p = tot ? Math.round((a / tot) * 100) : 0;
+      return `<div class="pat-donut" id="${id}"><div class="ring" style="--p:${p}"><div><b>${tot ? p + "%" : "-"}</b><span>${tot ? la : "기록 없음"}</span></div></div>
+        <div class="pat-meta"><b>${title}</b><span><i class="dot-a"></i>${la} ${a}</span><span><i class="dot-b"></i>${lb} ${b}</span>${note ? `<span class="muted">${note}</span>` : ""}</div></div>`;
+    };
+    // 리듬: 최근 12주 주 평균, 최근 18주 날짜별 히트맵(월~일)
+    const cnt = {}; allDone.forEach((r) => (cnt[r.date] = (cnt[r.date] || 0) + 1));
+    const since84 = ymdL(new Date(today.getTime() - 83 * 864e5));
+    const perWeek = allDone.filter((r) => r.date >= since84).length / 12;
+    const WEEKS = 18, start = new Date(today); start.setDate(start.getDate() - ((start.getDay() + 6) % 7) - (WEEKS - 1) * 7);
+    let heat = "", mon = "";
+    for (let w = 0; w < WEEKS; w++) {
+      const d0 = new Date(start); d0.setDate(start.getDate() + w * 7);
+      mon += `<span>${d0.getDate() <= 7 ? d0.getMonth() + 1 + "월" : ""}</span>`;
+      heat += `<div class="hcol">` + [0, 1, 2, 3, 4, 5, 6].map((i) => {
+        const d = new Date(d0); d.setDate(d0.getDate() + i);
+        const k = ymdL(d), n = cnt[k] || 0, fut = d > today;
+        return `<i class="${fut ? "fut" : n >= 2 ? "h2" : n === 1 ? "h1" : ""}${k === todayS ? " today" : ""}" title="${k}${n ? " · " + n + "회" : ""}"></i>`;
+      }).join("") + `</div>`;
+    }
     app.innerHTML = `${head("insights")}
       <div class="card oneline">
         올해 <b>${I.thisYear.n}라운드</b>${isNum(I.thisYear.avg) ? ` · 평균 <b>${f1(I.thisYear.avg)}</b>` : ""}${I.thisYear.best ? ` · 베스트 <b>${I.thisYear.best}</b>` : ""} ·
@@ -1697,6 +1854,36 @@
         이번 달 <b>${I.thisMonth.courses}곳</b>에서 ${I.thisMonth.n}라운드 ·
         ${I.daysSinceLast > 0 ? `마지막 라운드 <b>${I.daysSinceLast}일 전</b>` : I.daysSinceLast === 0 ? `마지막 라운드 <b>오늘</b>` : `다음 라운드 <b>${-I.daysSinceLast}일 뒤</b>`}
       </div>
+      <h2>라운드 패턴 <span class="muted">위 조건의 라운드 ${done.length}회</span></h2>
+      <div class="pat-grid">
+        ${donut("dWk", "요일", wkEnd, done.length - wkEnd, "주말", "평일")}
+        ${donut("dAm", "티오프", amN, timedN.length - amN, "오전", "오후", done.length - timedN.length ? `시각 미입력 ${done.length - timedN.length}회` : "")}
+        <div id="dGrp">${donut("dGrpIn", "유형", 0, done.length, "모임", "개인", "모임 일정 확인 중…")}</div>
+      </div>
+
+      <h2>라운드 리듬</h2>
+      <div class="card">
+        <div class="kpis" style="margin-top:0">
+          ${kpi("주 평균", perWeek ? perWeek.toFixed(1) + "회" : "0회", "최근 12주")}
+          ${kpi("평균 간격", isNum(I.avgGap) ? I.avgGap.toFixed(0) + "일마다" : "-", "라운드 사이")}
+          ${kpi("마지막 라운드", allDone.length ? (() => { const n = Math.round((today - new Date(allDone.map((r) => r.date).sort().at(-1) + "T00:00:00")) / 864e5); return n === 0 ? "오늘" : n + "일 전"; })() : "-", allDone.length ? dot(allDone.map((r) => r.date).sort().at(-1)) : "")}
+        </div>
+        <div class="heat-wrap"><div class="heat-days"><span>월</span><span></span><span>수</span><span></span><span>금</span><span></span><span>일</span></div>
+          <div><div class="heat-mon">${mon}</div><div class="heat">${heat}</div></div></div>
+        <p class="legend-dots" style="margin:8px 0 0"><span><i style="background:#eef1f6"></i>없음</span><span><i style="background:#9fdcc2"></i>1회</span><span><i style="background:#2f9e78"></i>2회 이상</span><span><i style="background:#fff;outline:2px solid var(--accent)"></i>오늘</span> <span class="muted">최근 ${WEEKS}주</span></p>
+        <h3>요일별 라운드</h3><div class="chart-box" style="height:170px"><canvas id="cDow"></canvas></div>
+      </div>
+
+      <h2>최근 90일 라운드</h2>
+      <div class="kpis">
+        ${kpi("라운드", I.d90.n + "회", "최근 90일")}
+        ${kpi("평균", f1(I.d90.avg), "18홀 기준")}
+        ${kpi("베스트", I.d90.best ?? "-", "18홀 기준")}
+      </div>
+      <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th class="l">일자</th><th class="l">골프장</th><th>스코어</th></tr></thead><tbody>
+        ${I.d90.list.filter((r) => r.date <= todayS).map((r) => `<tr class="click" data-id="${esc(r.id)}"><td class="l">${dot(r.date)}</td><td class="l">${esc(r.course)}</td><td>${r.full ? `<b>${r.strokes}</b>` : `<span class="muted">${r.holes}홀</span>`}</td></tr>`).join("") || `<tr><td colspan="3" class="muted">최근 90일 라운드가 없습니다.</td></tr>`}
+      </tbody></table></div>
+
       <h2>다녀온 지역 <span class="muted">시·도별 골프장 수 · 누르면 골프장 목록</span></h2>
       <div class="card">
         ${(() => {
@@ -1710,23 +1897,7 @@
         })()}
       </div>
 
-      ${(() => {
-        const CR = companionRecords(fr);
-        if (!CR.length) return "";
-        return `<h2>동반자 전적 <span class="muted">18홀 총타수 비교 · 이름을 고치면 모든 라운드에 반영</span></h2>
-        <div class="tbl-wrap"><table><thead><tr><th class="l">동반자</th><th>함께</th><th>나의 승-패-무</th><th>내 평균</th><th>동반자 평균</th><th>평균 차</th><th>최근</th><th></th></tr></thead>
-        <tbody>${CR.map((x, i) => { const d = x.mine.length ? S.avg(x.theirs) - S.avg(x.mine) : null; return `<tr><td class="l"><b>${esc(x.name)}</b></td><td>${x.n}회</td><td>${x.mine.length ? `<b>${x.w}</b>-${x.l}-${x.t}` : "-"}</td><td>${f1(S.avg(x.mine))}</td><td>${f1(S.avg(x.theirs))}</td><td class="${isNum(d) ? (d > 0 ? "ok" : d < 0 ? "ng" : "") : ""}">${isNum(d) ? (d > 0 ? `내가 ${d.toFixed(1)}타 앞섬` : d < 0 ? `${(-d).toFixed(1)}타 뒤짐` : "같음") : "-"}</td><td>${dot(x.last)}</td><td><button class="link" data-rename="${i}" type="button" ${G.canWrite() ? "" : "disabled"}>이름 고치기</button></td></tr>`; }).join("")}</tbody></table></div>
-        <div id="renameBox"></div>`;
-      })()}
-
-      <h2>라운드 패턴</h2>
-      <div class="kpis">
-        ${kpi("평균 라운드 간격", isNum(I.avgGap) ? I.avgGap.toFixed(0) + "일" : "-", "라운드 사이 평균 일수")}
-        ${kpi("주말 비중", pct(I.weekendShare), "토·일 라운드")}
-        ${I.ampm ? kpi("오전 / 오후", `${I.ampm.am.n} / ${I.ampm.pm.n}`, `평균 ${f1(I.ampm.am.avg)} / ${f1(I.ampm.pm.avg)}`) : kpi("오전 / 오후", "-", "티오프 시간 기록 없음")}
-      </div>
-      <div class="card" style="margin-top:12px"><h3 class="mt0">요일별 라운드</h3><div class="chart-box"><canvas id="cDow"></canvas></div></div>
-      <p class="legend-note">최근 90일 라운드는 위 필터의 「최근 90일」로 모든 화면에서 볼 수 있습니다.</p>`;
+      <p class="legend-note">패턴·다녀온 지역은 위 조건(기간·골프장)의 라운드로, 리듬·최근 90일은 전체 기록으로 셉니다. 모임 라운드는 라운드 입력의 「유형」이 모임인 라운드입니다(예전 라운드는 참석한 모임 일정 날짜로 추정).</p>`;
     app.querySelectorAll("tr[data-id]").forEach((tr) => (tr.onclick = () => (location.hash = "#/round/" + encodeURIComponent(tr.dataset.id))));
     // 지역 타일을 누르면 그 지역 골프장 목록
     const RS = Regions.summarize(A.rs, rounds);
@@ -1744,23 +1915,14 @@
     app.querySelectorAll("[data-reg]").forEach((b) => (b.onclick = () => showRegion(b.dataset.reg)));
     const top = Object.entries(RS).filter(([k]) => k !== "미지정").sort((a, b) => b[1].courses.length - a[1].courses.length)[0];
     if (top) showRegion(top[0]);
-    // 동반자 이름 고치기: 그 이름이 들어간 모든 라운드를 한 번에 바꾼다
-    const CR = companionRecords(rounds);
-    const CRf = companionRecords(fr);
-    app.querySelectorAll("[data-rename]").forEach((b) => (b.onclick = () => {
-      const old = CRf[b.dataset.rename].name;
-      document.getElementById("renameBox").innerHTML = `<div class="notice" style="margin-top:8px">「${esc(old)}」 → <input id="rnNew" value="${esc(old)}" style="width:140px"> <button class="btn" id="rnGo" type="button">모든 라운드에서 바꾸기</button> <span class="muted">${(CR.find((x) => x.name === old) || { n: 0 }).n}개 라운드</span></div>`;
-      document.getElementById("rnGo").onclick = async () => {
-        const nv = document.getElementById("rnNew").value.trim();
-        if (!nv || nv === old) return;
-        try {
-          await commit((data) => data.map((r) => (r.companions && r.companions.some((c) => c.name === old) && !r.companions.some((c) => c.name === nv) ? { ...r, companions: r.companions.map((c) => (c.name === old ? { ...c, name: nv } : c)) } : r)), `동반자 이름 변경: ${old} → ${nv}`);
-          if (old.includes("*")) { const al = ls.get(KEY_ALIAS) || {}; al[old] = nv; ls.set(KEY_ALIAS, al); }
-          toast("이름을 바꿨습니다.");
-          insightsView();
-        } catch (e) { toast(e.message, 6000); }
-      };
-    }));
+    // 모임/개인 비율: 내가 참석으로 표시한 모임 일정과 같은 날의 라운드(서버판2)
+    if (!G.api) { const inGrp = done.filter((r) => r.kind === "group").length; document.getElementById("dGrp").innerHTML = donut("dGrpIn", "유형", inGrp, done.length - inGrp, "모임", "개인"); }
+    else G.api("GET", `/api/schedule?from=2000-01-01&to=${todayS}`).then(({ events }) => {
+      if (!document.getElementById("dGrp")) return;
+      const days = new Set(events.filter((e) => e.my_going === true).map((e) => e.date));
+      const inGrp = done.filter((r) => (r.kind ? r.kind === "group" : days.has(r.date))).length;
+      document.getElementById("dGrp").innerHTML = donut("dGrpIn", "유형", inGrp, done.length - inGrp, "모임", "개인");
+    }).catch(() => { const g = document.getElementById("dGrp"); if (g) g.innerHTML = donut("dGrpIn", "유형", 0, done.length, "모임", "개인", "모임 일정을 불러오지 못했습니다"); });
     chart("cDow", { type: "bar", data: { labels: I.dow.map((d) => d.l), datasets: [{ data: I.dow.map((d) => d.n), backgroundColor: I.dow.map((d, i) => (i === 0 || i === 6 ? "#ff8f8f" : "#7fd1ae")) }] }, options: baseOpts({ scales: { y: { beginAtZero: true, ticks: { precision: 0 }, ...noGrid }, x: noGrid } }), plugins: [valueLabels((v) => v)] });
   }
 
@@ -1780,7 +1942,7 @@
         <li><b>동반자</b>: 붙여 넣은 글에 「이름 숫자…」 줄(예: <code>홍*동 1 0 2 …</code>, <code>철수 85</code>)이 있으면 동반자로 읽습니다. 「추가·편집」에서 스코어만 넣거나, 따로 붙여 넣거나, 스코어카드 사진에서 읽을 수 있고 사진을 라운드에 붙일 수도 있습니다. 이름은 *로 가려 적어도 됩니다(예: 홍*동).</li>
         <li>홀별 Par·Score·거리와 티오프 시간이 들어옵니다. 퍼트 등 상세 항목은 등록 뒤 「수정」에서 채우면 됩니다.</li>
       </ul>
-      ${G.canWrite() ? "" : `<div class="notice">저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요. 읽기와 확인은 지금도 됩니다.</div>`}
+      ${G.canWrite() ? "" : `<div class="notice">${SRV ? "로그인해야 저장할 수 있습니다." : `저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요.`} 읽기와 확인은 지금도 됩니다.</div>`}
       <textarea id="ssText" class="pastebox" placeholder="예)&#10;기흥CC&#10;NORTH, WEST&#10;2026-08-29 07:10&#10;80&#10;홀별 스코어&#10;Par 4 4 3 ...&#10;Score 0 1 0 ...&#10;White 320 300 140 ...   ← 홀 길이(선택)&#10;Par ...&#10;Score ...&#10;White ..."></textarea>
       <div class="row" style="margin-top:8px"><button class="btn" id="bParse" type="button">읽기</button><button class="btn ghost" id="bClear" type="button">지우기</button>
         <label class="btn ghost filebtn">📷 사진 첨부 (동반자 점수)<input type="file" accept="image/*" multiple id="ssPhoto" hidden></label></div>
@@ -1945,7 +2107,7 @@
         ${parsed.some((r) => r.distCount && !r.tee) ? `<p class="legend-note ng">거리가 있는 라운드는 <b>티</b>를 적어 주세요. 다음에 같은 티로 칠 때 거리를 자동으로 불러올 수 있습니다.</p>` : ""}
         <datalist id="knownCourses">${known.sort().map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
         ${compIdx >= 0 ? `<div class="card" style="margin-top:12px"><h3 class="mt0">동반자·사진 — ${dot(parsed[compIdx].date)} ${esc(parsed[compIdx].course)}</h3><div id="ssComp"></div></div>` : ""}
-        <div class="row" style="margin-top:10px"><button class="btn" id="bImport" type="button" ${G.canWrite() && n ? "" : "disabled"}>선택한 ${n}개 GitHub에 등록</button></div>`;
+        <div class="row" style="margin-top:10px"><button class="btn" id="bImport" type="button" ${G.canWrite() && n ? "" : "disabled"}>선택한 ${n}개 등록</button></div>`;
       if (compIdx >= 0) {
         const pr = parsed[compIdx];
         companionEditor($("ssComp"), pr.st, parsOf(pr), () => { const el = app.querySelector(`[data-ccount="${compIdx}"]`); if (el) el.innerHTML = compLabel(pr); });
@@ -1983,7 +2145,7 @@
         } catch (e) {
           toast(e.message, 6000);
           bi.disabled = false;
-          bi.textContent = `선택한 ${picks.length}개 GitHub에 등록`;
+          bi.textContent = `선택한 ${picks.length}개 등록`;
         }
       };
     }
@@ -2065,8 +2227,17 @@
     const cat = only || memoCat;
     const notes = M.notes.filter((n) => !cat || n.cats.includes(cat));
     const scoreName = (v) => (!isNum(v) ? "" : v <= -1 ? "버디+" : v === 0 ? "파" : v === 1 ? "보기" : v === 2 ? "더블" : "+" + v);
-    const rows = notes.map((n) => `<tr class="click" data-id="${esc(n.rid)}"><td>${dot(n.date).slice(2)}<br><span class="muted">${esc(n.course)}</span></td><td><b>${n.h}</b>${isNum(n.par) ? `<br><span class="muted">파${n.par}</span>` : ""}</td><td>${scoreName(n.score)}${isNum(n.putts) ? `<br><span class="muted">${n.putts}퍼트${isNum(n.fp) && n.fp > 0 ? " · " + n.fp + "m" : ""}</span>` : ""}</td>
-      <td class="l wrap">${n.parts.filter((p) => !cat || p.cat === cat).map((p) => `${only ? "" : `<span class="pill" style="background:#eef1f6">${M.cats[p.cat]}</span> `}${esc(p.text)} ${TONE[p.tone] || ""}`).join("<br>")}</td></tr>`).join("");
+    const row = (n) => `<tr class="click" data-id="${esc(n.rid)}"><td><b>${n.h}</b>${isNum(n.par) ? `<br><span class="muted">파${n.par}</span>` : ""}</td><td>${scoreName(n.score)}${isNum(n.putts) ? `<br><span class="muted">${n.putts}퍼트${isNum(n.fp) && n.fp > 0 ? " · " + n.fp + "m" : ""}</span>` : ""}</td>
+      <td class="l wrap">${n.parts.filter((p) => !cat || p.cat === cat).map((p) => `${only ? "" : `<span class="pill" style="background:#eef1f6">${M.cats[p.cat]}</span> `}${esc(p.text)} ${TONE[p.tone] || ""}`).join("<br>")}</td></tr>`;
+    // 라운드(날짜)별로 묶어 접어 둔다 — 가장 최근 라운드만 펼침
+    const groups = [];
+    for (const n of notes) { let g = groups.find((x) => x.rid === n.rid); if (!g) groups.push((g = { rid: n.rid, date: n.date, course: n.course, list: [] })); g.list.push(n); }
+    groups.sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : 0));
+    const toneN = (g, t) => g.list.reduce((k, n) => k + n.parts.filter((p) => (!cat || p.cat === cat) && p.tone === t).length, 0);
+    const grouped = groups.map((g, i) => { const good = toneN(g, "good"), bad = toneN(g, "bad");
+      return `<details class="memo-day" ${i === 0 ? "open" : ""}><summary><b>${dot(g.date)}</b> ${esc(g.course)} <span class="muted">메모 ${g.list.length}홀${good ? ` · <span class="ok">잘함 ${good}</span>` : ""}${bad ? ` · <span class="ng">미스 ${bad}</span>` : ""}</span></summary>
+        <div class="tbl-wrap"><table><thead><tr><th>홀</th><th>결과</th><th class="l">메모</th></tr></thead><tbody>${g.list.sort((a, b) => a.h - b.h).map(row).join("")}</tbody></table></div>
+        <p class="legend-note"><a href="#/round/${encodeURIComponent(g.rid)}">이 라운드 전체 기록 보기 →</a></p></details>`; }).join("");
     const sum = only ? "" : `<div class="tbl-wrap"><table><thead><tr><th class="l">샷 종류</th><th>메모한 홀</th><th>잘함</th><th>미스</th><th>그 홀 평균 Score</th></tr></thead>
       <tbody>${M.byCat.filter((c) => c.n).map((c) => `<tr class="click" data-mc="${c.k}"><td class="l"><b>${c.l}</b></td><td>${c.n}</td><td class="${c.good ? "ok" : ""}">${c.good}</td><td class="${c.bad > c.good ? "ng" : ""}">${c.bad}</td><td>${sgn(c.over)}</td></tr>`).join("")}</tbody></table></div>
       <div class="chips" style="margin:10px 0 8px"><button type="button" class="chip ${memoCat ? "" : "on"}" data-mc="">전체 ${M.notes.length}</button>${M.byCat.filter((c) => c.n).map((c) => `<button type="button" class="chip ${memoCat === c.k ? "on" : ""}" data-mc="${c.k}">${c.l} ${c.n}</button>`).join("")}</div>`;
@@ -2075,7 +2246,7 @@
       ${!M.notes.length ? `<p class="legend-note">아직 메모를 적은 홀이 없습니다. 라운드 입력의 홀별 「메모」 칸에 잘한 샷·미스한 샷을 적어 두면 여기에 모입니다.</p>` : `
       ${!only && worst ? `<p class="legend-note"><b class="ng">미스 메모가 가장 많은 샷: ${worst.l}</b> (${worst.bad}번). 숫자보다 「어떤 미스가 반복되는지」를 아래 메모에서 확인하세요.</p>` : ""}
       ${sum}
-      ${notes.length ? `<div class="tbl-wrap"><table><thead><tr><th>날짜</th><th>홀</th><th>결과</th><th class="l">메모</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="legend-note">이 종류로 분류된 메모가 없습니다.</p>`}
+      ${notes.length ? `<p class="legend-note">라운드별로 묶었습니다. 날짜를 누르면 펼쳐집니다(라운드 ${groups.length}개).</p>${grouped}` : `<p class="legend-note">이 종류로 분류된 메모가 없습니다.</p>`}
       <p class="legend-note">메모 낱말로 자동 분류한 값이라 틀릴 수 있습니다(예: 「7 탑」→ 세컨·미스, 「첫펏 짤」→ 퍼트·미스, 「6번으로 온」→ 세컨·잘함). 문장마다 <b>티샷 · 세컨/7번 · 어프로치 · 벙커 · 펏</b>처럼 샷 이름을 앞에 쓰고 쉼표로 나누면 더 정확해집니다.</p>`}</div>`;
   }
   function bindMemo(rerender) {
@@ -2239,30 +2410,35 @@
 
   // ───────────── 사용자 가이드 ─────────────
   const GUIDE = {
-    app: "My Golf Lounge",
+    app: "Our Golf Lounge",
     url: G.where().siteUrl,
-    features: { filter: true, import: true, insights: true, fork: true },
+    features: { filter: true, import: true, insights: true, fork: !SRV },
     repos: G.where().repos,
     origin: G.where().origin,
     isOrigin: G.where().isOwner,
   };
   function guideView() {
+    if (!SRV) return guideViewGH();
     // 가이드 본문의 메뉴 이름 중 바뀐 것만 맨 위에 알려 준다(2026.10.26 메뉴 정리)
-    app.innerHTML = `<div class="notice" style="margin-bottom:12px"><b>메뉴 안내</b> — 가이드의 「통계」「홀·파 분석」「퍼트 분석」「상세 분석」은 <b>분석</b> 메뉴의 스코어·홀파·퍼트·샷 분석 탭, 「붙여넣기 등록」은 <b>라운드 입력</b> 메뉴의 붙여넣기·사진 탭, 「기록·동반자」는 예전 「인사이트」 메뉴입니다. 골프장 정보·요청은 <b>라운드 목록</b> 아래 「골프장 정보」, 목표 기준값과 육각형 기준은 설정의 <b>지표 기준</b> 한 표입니다.</div>
-      <div class="notice" style="margin-bottom:12px">🆕 <b>메뉴·화면 정리 내역</b> — 겹치던 통계·분석·설정을 어떻게 합치고 옮겼는지 <a href="#/review">보기 (${REVIEW.length}가지)</a> · 버전별 새 기능은 <a href="#/settings?sec=version">설정 → 버전</a></div>` + Guide.render(GUIDE);
+    app.innerHTML = `<div class="notice" style="margin-bottom:12px"><b>메뉴 안내</b> — 왼쪽 메뉴(휴대폰은 아래 탭): 홈 · 일정 · 라운드 기록 · 라운드 입력 · 통계 · 친구 · 모임 · 마이페이지. 가이드에 나오는 「분석」은 지금 <b>통계</b> 메뉴(스코어·베스트 스코어·홀파·퍼트·샷 분석·라운드 인사이트·동반 기록·자주 가는 골프장·친구 순위 탭)이고, 「설정」은 <b>마이페이지 → 설정</b>입니다. 골프장 정보·요청은 <b>라운드 기록</b> 아래 「골프장 정보」에 있습니다.</div>` + Guide.render(GUIDE);
     Guide.bind(app);
   }
 
   // ───────────── 설정·데이터 ─────────────
-  // 서버판(api.js, KIND "server")의 「내 계정」 자리. GitHub판에서는 쓰지 않는다.
+  // 설정 맨 위 「내 계정」
   function accountHtml() {
     const me = typeof G.me === "function" ? G.me() : null;
     return `<h2>내 계정</h2>
       <div class="card"><p class="mt0">${me ? `<b>${esc(me.nickname || "")}</b> (${esc(me.email || "")})로 로그인했습니다.` : "로그인하지 않았습니다."}</p>
-        ${me && G.pushStatus ? `<p id="pushBox" class="muted">라운드 전날 알림 확인 중…</p>` : ""}
-        <div class="row">${me ? `<a class="btn" href="friends.html">친구·순위</a>` : ""}${me && me.role === "admin" ? `<a class="btn ghost" href="admin.html">관리자 화면</a>` : ""}${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div></div>`;
+        ${me && G.pushStatus ? `<p id="pushBox" class="muted">전날 알림 확인 중…</p>` : ""}
+        <div class="row">${me ? `<a class="btn" href="#/friends">친구</a>` : ""}${me && me.role === "admin" ? `<a class="btn ghost" href="/admin/">관리자 화면</a>` : ""}${me && G.logout ? `<button class="btn ghost" id="bLogout" type="button">로그아웃</button>` : ""}</div></div>`;
   }
-  function settingsView() {
+  function guideViewGH() {
+    app.innerHTML = `<div class="notice" style="margin-bottom:12px"><b>메뉴 안내</b> — 왼쪽 메뉴(휴대폰은 아래 탭): 홈 · 라운드 기록 · 라운드 입력 · 통계 · 가이드 · 설정. 가이드에 나오는 「분석」「기록·동반자」는 지금 <b>통계</b> 메뉴(스코어·베스트 스코어·홀파·퍼트·샷 분석·라운드 인사이트·동반 기록·자주 가는 골프장 탭)에 있고, 「붙여넣기 등록」은 <b>라운드 입력</b>의 붙여넣기·사진 탭입니다. 모임·일정·친구는 서버판(golflounge.duckdns.org)에만 있습니다.</div>
+      <div class="notice" style="margin-bottom:12px">🆕 <b>메뉴·화면 정리 내역</b> — <a href="#/review">보기 (${REVIEW.length}가지)</a> · 버전별 새 기능은 <a href="#/settings?sec=version">설정 → 버전</a></div>` + Guide.render(GUIDE);
+    Guide.bind(app);
+  }
+  function settingsViewGH() {
     const c = G.cfg ? G.cfg() : {};
     const tg = settings.targets, rd = settings.radar;
     app.innerHTML = `
@@ -2450,6 +2626,126 @@
       URL.revokeObjectURL(a.href);
     };
   }
+  function settingsView() {
+    if (!SRV) return settingsViewGH();
+    const c = G.cfg ? G.cfg() : {};
+    const tg = settings.targets, rd = settings.radar;
+    app.innerHTML = `
+      ${native ? "" : `<h2>휴대폰에 앱으로 설치</h2>
+      <div class="card">
+        ${installPrompt ? `<button class="btn" id="bInstall" type="button">앱 설치</button>` : `<p class="muted mt0">${window.matchMedia("(display-mode: standalone)").matches ? "앱으로 실행 중입니다." : "안드로이드 Chrome: 오른쪽 위 ⋮ 메뉴 → <b>앱 설치</b>(또는 홈 화면에 추가)를 누르세요."}</p>`}
+        <p class="legend-note">설치하면 홈 화면 아이콘으로 전체 화면에서 열리고, 인터넷이 없어도 마지막으로 받은 기록을 볼 수 있습니다. APK와 달리 Play 프로텍트 경고가 없습니다.</p>
+      </div>`}
+
+      ${accountHtml()}
+
+      
+
+      <h2>지표 기준 <span class="muted">목표(판정) · 0점 · 100점(육각형)</span></h2>
+      <div class="tbl-wrap"><table><thead><tr><th class="l">지표</th><th>목표</th><th>0점</th><th>100점</th></tr></thead>
+        <tbody>${UNI.map((u) => {
+          const t = u.t && tg[u.t], x = u.r && rd[u.r], k = RSCALE[u.r] || 1, unit = u.r && PCT.has(u.r) ? "%" : "";
+          const tIn = t ? `<input data-t="${u.t}" type="number" step="${t.fmt === "%" ? 1 : 0.5}" value="${t.fmt === "%" ? Math.round(t.v * 100) : t.v}" style="width:70px">${t.fmt === "%" ? " %" : ""}` : `<span class="muted" title="육각형 목표선 점수가 되는 값">${fmtT(uniGoal(u).v, uniGoal(u).fmt)}<br>(${settings.radarTarget}점 값)</span>`;
+          const rIn = (w, v) => `<input data-${w}="${u.r}" type="number" step="${unit ? 1 : 0.1}" value="${+(v * k).toFixed(2)}" style="width:70px">${unit ? " %" : ""}`;
+          const sc = !x && settings.scores[u.t];
+          const sp = t && t.fmt === "%";   // 비율 지표(샌드세이브)는 %로 보여 주고 0~1로 저장
+          const sIn = (w, v) => `<input data-${w}="${u.t}"${sp ? " data-pct" : ""} type="number" step="${sp ? 1 : 0.5}" value="${sp ? Math.round(v * 100) : v}" style="width:70px">${sp ? " %" : ""}`;
+          return `<tr><td class="l"><b>${u.label}</b>${uniPill(u)}<br><span class="muted">${u.sub ? u.sub + " · " : ""}${u.low ? "낮을수록 좋음" : "높을수록 좋음"}${u.r === "pph" ? " · 라운드(18홀)당" : ""}</span></td><td>${tIn}</td><td>${x ? rIn("rz", x.zero) : sc ? sIn("sz", sc.zero) : "-"}</td><td>${x ? rIn("rf", x.full) : sc ? sIn("sf", sc.full) : "-"}</td></tr>`;
+        }).join("")}
+        <tr><td class="l"><b>육각형 목표선</b><br><span class="muted">점수 기준선</span></td><td colspan="3"><input id="rTarget" type="number" value="${settings.radarTarget}" style="width:70px"> 점</td></tr></tbody></table></div>
+      <p class="legend-note">평균 타수·파 이하 홀·더블보기+·샌드세이브·벌타의 0점·100점은 실력 진단 표의 점수에만 쓰이고 육각형 모양은 그대로입니다. 거리감·위기관리의 목표는 육각형 목표선 점수가 되는 값으로 자동 계산합니다(100점 값이나 목표선을 바꾸면 같이 바뀜). 기준값은 아마추어 핸디캡별 통계 경향을 참고한 가정값입니다(100점 ≈ 싱글~10 핸디캡, 0점 ≈ 초보). 비율은 %로, 퍼트는 라운드당으로 입력합니다(저장은 0~1·홀당 형식으로 바꿔서 함).</p>
+      <div class="row" style="margin-top:10px"><button class="btn" id="bSaveSet" type="button" ${G.canWrite() ? "" : "disabled"}>기준값 저장</button><button class="btn ghost" id="bResetSet" type="button">기본값 불러오기</button></div>
+
+      <h2>골프장 정보 <span class="muted">라운드 전 등록·홀별 공략</span></h2>
+      <div class="card"><p class="mt0">등록된 골프장 ${openClubs().length}곳${courseReqs.some((q) => q.status === "요청") ? ` · <b>대기 중인 요청 ${courseReqs.filter((q) => q.status === "요청").length}건</b>` : ""}. 등록 목록·새 골프장 정보 요청·요청 현황은 <a href="#/rounds?sec=courses">라운드 목록 → 골프장 정보</a>에 모았습니다.</p></div>
+
+      <h2 id="sec-clubs">내 클럽 거리 <span class="muted">평균 거리(m), 굴러간 거리 포함</span></h2>
+      ${Clubs.isDefault(settings) ? `<div class="notice">지금은 <b>예시값</b>입니다. 내 평균 거리로 바꾸고 저장하세요. 연습장이나 스마트 거리측정 기록의 '평소 거리'를 넣으면 됩니다(최고 거리 아님).</div>` : ""}
+      <div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>사용</th><th class="l">클럽</th><th>거리(m)</th></tr></thead>
+        <tbody>${(Array.isArray(settings.clubs) ? settings.clubs : Clubs.DEFAULT_BAG).map((c, i) => `<tr><td><input type="checkbox" data-con="${i}" ${c.on ? "checked" : ""}></td><td class="l"><input data-clab="${i}" value="${esc(c.label)}" style="width:170px"></td><td><input data-cdist="${i}" type="number" inputmode="numeric" step="5" min="0" value="${c.dist}" style="width:84px"></td></tr>`).join("")}</tbody></table></div>
+      ${(() => {
+        const ds = S.analyze(rounds, settings).rs.filter((r) => isNum(r.drive));
+        const n = S.sum(ds.map((r) => r.driveN));
+        const v = n ? Math.round(S.sum(ds.map((r) => r.drive * r.driveN)) / n) : null;
+        return v ? `<p class="legend-note">📏 기록된 드라이버 평균 거리: <b>${v}m</b> (파4·파5 티샷 ${n}홀) <button class="link" id="bUseDrive" data-v="${v}" type="button">드라이버 거리에 적용</button></p>` : "";
+      })()}
+      <div id="gapBox" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="bSaveClubs" type="button" ${G.canWrite() ? "" : "disabled"}>클럽 거리 저장</button><button class="btn ghost" id="bClubDefault" type="button">예시값으로</button></div>
+      <p class="legend-note">저장하면 라운드 입력의 <b>공략 가이드</b>와 상세 분석 <b>⑨ 예상 어프로치 클럽별</b>에 쓰입니다. 안 쓰는 클럽은 「사용」을 끄세요.</p>
+
+      <h2>백업</h2>
+      ${native ? `<p class="muted">앱에서는 파일 내려받기가 안 됩니다. 내 기록 파일이 필요하면 웹 브라우저에서 이 화면을 열어 내려받으세요.</p>` : `<div class="row"><button class="btn ghost" id="bExport" type="button">rounds.json 내려받기</button></div>`}
+      <p class="muted">현재 ${rounds.length}라운드 · 기록은 서버에 회원별로 저장되고 매일 백업됩니다.</p>
+      `;
+    const $ = (s) => document.getElementById(s);
+    if ($("bInstall")) $("bInstall").onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; settingsView(); };
+    if ($("bLogout")) $("bLogout").onclick = () => G.logout();
+    // 전날 19시 알림: 예정 라운드(홀별 공략)·개인 일정
+    const pushBox = $("pushBox");
+    const renderPush = async () => {
+      const st = await G.pushStatus().catch(() => "unsupported");
+      pushBox.innerHTML = {
+        on: `🔔 <b>전날 알림 켜짐</b>(이 기기) — 예정 라운드(홀별 공략)·개인 일정 전날 19시에 알림 <button class="link" id="bPushOff" type="button">끄기</button>`,
+        off: `🔕 전날 알림 꺼짐 <button class="btn ghost xs" id="bPushOn" type="button">이 기기에서 켜기</button>`,
+        denied: `🔕 이 브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 알림을 허용하세요.`,
+        unsupported: `이 브라우저는 알림을 지원하지 않습니다(아이폰은 홈 화면에 추가한 앱에서만).`,
+      }[st];
+      if ($("bPushOn")) $("bPushOn").onclick = async () => { try { await G.pushEnable(); toast("알림을 켰습니다. 시험 알림을 보냈습니다.", 4000); } catch (e) { toast(e.message, 5000); } renderPush(); };
+      if ($("bPushOff")) $("bPushOff").onclick = async () => { await G.pushDisable(); toast("이 기기의 알림을 껐습니다."); renderPush(); };
+    };
+    if (pushBox) renderPush();
+    $("bSaveSet").onclick = async () => {
+      app.querySelectorAll("[data-t]").forEach((el) => { const t = tg[el.dataset.t]; const v = Number(el.value); if (el.value !== "" && isNum(v)) t.v = t.fmt === "%" ? v / 100 : v; });
+      app.querySelectorAll("[data-rz]").forEach((el) => { const v = Number(el.value); if (el.value !== "" && isNum(v)) rd[el.dataset.rz].zero = v / (RSCALE[el.dataset.rz] || 1); });
+      app.querySelectorAll("[data-rf]").forEach((el) => { const v = Number(el.value); if (el.value !== "" && isNum(v)) rd[el.dataset.rf].full = v / (RSCALE[el.dataset.rf] || 1); });
+      app.querySelectorAll("[data-sz]").forEach((el) => { const v = Number(el.value) / ("pct" in el.dataset ? 100 : 1); if (el.value !== "" && isNum(v)) settings.scores[el.dataset.sz].zero = v; });
+      app.querySelectorAll("[data-sf]").forEach((el) => { const v = Number(el.value) / ("pct" in el.dataset ? 100 : 1); if (el.value !== "" && isNum(v)) settings.scores[el.dataset.sf].full = v; });
+      const rt = Number($("rTarget").value);
+      if (isNum(rt)) settings.radarTarget = rt;
+      try {
+        const { mirrorErrors } = await G.update(() => settings, "기준값 변경", G.SETTINGS);
+        if (mirrorErrors.length) throw new Error("기준값은 저장했지만 동기화 실패: " + mirrorErrors.join(" / "));
+        toast("기준값을 저장했습니다.");
+      } catch (e) { toast(e.message, 6000); }
+    };
+    $("bResetSet").onclick = () => { settings = structuredClone(S.DEFAULT_SETTINGS); settingsView(); toast("기본값을 불러왔습니다. 저장하려면 「기준값 저장」을 누르세요."); };
+    // 클럽 거리: 입력이 바뀔 때마다 간격 점검을 다시 보여 준다
+    const baseClubs = (Array.isArray(settings.clubs) ? settings.clubs : Clubs.DEFAULT_BAG).map((c) => ({ ...c }));
+    const readClubs = () => baseClubs.map((c, i) => ({
+      key: c.key, label: (app.querySelector(`[data-clab="${i}"]`).value || c.label).trim(),
+      dist: Number(app.querySelector(`[data-cdist="${i}"]`).value) || 0, on: app.querySelector(`[data-con="${i}"]`).checked,
+    }));
+    const drawGaps = () => {
+      const gs = Clubs.gaps(Clubs.bag({ clubs: readClubs() }));
+      $("gapBox").innerHTML = gs.length ? `<div class="notice"><b>클럽 간격 점검</b><br>${gs.map((g) => `· [${g.type}] ${esc(g.text)}`).join("<br>")}</div>` : `<p class="legend-note ok">클럽 간 거리 간격이 고릅니다.</p>`;
+    };
+    app.querySelectorAll("[data-con],[data-clab],[data-cdist]").forEach((el) => el.addEventListener("input", drawGaps));
+    if ($("bUseDrive")) $("bUseDrive").onclick = () => {
+      const i = baseClubs.findIndex((c) => c.key === "D");
+      const el = i >= 0 && app.querySelector(`[data-cdist="${i}"]`);
+      if (!el) return toast("클럽 목록에 드라이버가 없습니다.");
+      el.value = $("bUseDrive").dataset.v;
+      drawGaps();
+      toast("드라이버 거리를 바꿨습니다. 「클럽 거리 저장」을 눌러야 저장됩니다.", 4000);
+    };
+    drawGaps();
+    $("bSaveClubs").onclick = async () => {
+      settings.clubs = readClubs();
+      try {
+        const { mirrorErrors } = await G.update(() => settings, "클럽 거리 변경", G.SETTINGS);
+        toast(mirrorErrors.length ? "클럽 거리는 저장했지만 동기화 실패: " + mirrorErrors.join(" / ") : "클럽 거리를 저장했습니다.", 4000);
+        settingsView();
+      } catch (e) { toast(e.message, 6000); }
+    };
+    $("bClubDefault").onclick = () => { delete settings.clubs; settingsView(); toast("예시값을 불러왔습니다. 저장하려면 「클럽 거리 저장」을 누르세요."); };
+    if ($("bExport")) $("bExport").onclick = () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(rounds, null, 1)], { type: "application/json" }));
+      a.download = `rounds-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+  }
 
   // ───────────── 안드로이드 앱(Capacitor) ─────────────
   // 뒤로 가기 버튼: 화면 이동 기록이 있으면 이전 화면, 없으면 앱 종료
@@ -2477,7 +2773,7 @@
       }
       hadController = true;
     });
-    // updateViaCache "none": sw.js가 불러오는 js/version.js도 브라우저 HTTP 캐시(GitHub Pages 10분)를 거치지 않고 확인해, 배포 직후에도 새 버전을 바로 알아챈다
+    // updateViaCache "none": sw.js가 불러오는 js/version.js도 브라우저 HTTP 캐시를 거치지 않고 확인해, 배포 직후에도 새 버전을 바로 알아챈다
     navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
       const check = () => reg.update().catch(() => { /* 오프라인 */ });
       // 설치형 앱은 오래 켜 두거나 백그라운드에서 돌아오는 일이 많아, 돌아올 때와 30분마다 새 버전을 확인한다
@@ -2509,7 +2805,7 @@
     const seen = ls.get(KEY_VER);
     if (seen && seen !== APP_VERSION) {
       const c = APP_CHANGES.find((x) => x.v === APP_VERSION);
-      setTimeout(() => toast(`v${APP_VERSION}로 업데이트되었습니다${c ? "\n" + c.items.slice(0, 3).map((x) => "· " + x).join("\n") : ""}`, 7000), 1200);
+      setTimeout(() => toast("새 버전으로 업데이트되었습니다.", 4000), 1200);
     }
     ls.set(KEY_VER, APP_VERSION);
   })();
@@ -2517,6 +2813,17 @@
     const cached = ls.get(KEY_CACHE);
     if (Array.isArray(cached)) { rounds = cached; source = "cache"; }
     window.addEventListener("hashchange", route);
+    // 왼쪽 메뉴: 휴대폰에서는 ☰로 열고 닫는다. 아래쪽에 닉네임·관리자·로그아웃
+    document.getElementById("menuBtn").onclick = () => document.body.classList.toggle("side-open");
+    document.getElementById("sideDim").onclick = () => document.body.classList.remove("side-open");
+    if (G.ready) G.ready.then(() => {
+      const me = G.me();
+      if (!me) return;
+      document.getElementById("sideFoot").innerHTML = `<span><b>${esc(me.nickname)}</b>님</span>
+        <a href="#/mypage">마이페이지</a>${me.role === "admin" ? `<a href="/admin/">관리자 화면 ↗</a>` : ""}
+        <button type="button" id="sideLogout">로그아웃</button>`;
+      document.getElementById("sideLogout").onclick = () => G.logout();
+    });
     if (rounds.length) route();
     else app.innerHTML = `<p class="muted">데이터를 불러오는 중…</p>`;
     await loadAll(true);

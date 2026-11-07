@@ -9,6 +9,10 @@
  *   영희 42 45         (전반·후반)
  *   민수               (이름만 있는 줄 다음에 오는 Score/숫자 줄은 그 사람 것)
  *   Score 1 0 2 ...
+ *   표 형태(| 구분, 후반이 먼저 와도 됨, 칸 합계 48(+12)는 무시, PAR 줄로 +/-를 타수로):
+ *   Hole   10 11 … 18 | T || 1 2 … 9 | T || 합계
+ *   PAR     5  3 …  4 | 36 || 4 4 … 4 | 36 || 72
+ *   홍*동   0  1 …  1 | 48(+12) || 2 0 … 2 | 49(+13) || 97(+25)
  */
 const Companions = (() => {
   const sum = (a) => a.reduce((x, y) => x + y, 0);
@@ -84,10 +88,48 @@ const Companions = (() => {
   }
   const popcount = (m) => { let c = 0; while (m) { c += m & 1; m >>= 1; } return c; };
 
+  /* 표 형태(| 구분) 글을 「이름 1번홀 … 18번홀」 줄로 바꾼다.
+   * - Hole 줄의 홀 번호 순서로 칸을 맞는 홀에 넣는다(후반 10~18이 먼저 와도 됨)
+   * - | 로 나뉜 칸 중 숫자 3개 이상인 칸만 홀 기록으로 쓰고, T·합계·48(+12) 같은 합계 칸은 버린다
+   * - PAR 줄은 { 홀: par }로 돌려준다(내 라운드 Par가 없을 때 +/-를 타수로 바꾸는 데 씀)
+   * | 가 없는 줄은 그대로 둔다(예전 한 줄 형태·사진 읽기와 같음) */
+  function normalizeTable(text) {
+    const lines = String(text || "").replace(/\r/g, "").split("\n");
+    if (!lines.some((l) => l.includes("|"))) return { text, pars: {} };
+    let order = null;
+    const pars = {}, out = [];
+    const holeVals = (line) => {
+      const segs = line.replace(/\([^)]*\)/g, " ").split(/\|+/);
+      const first = segs[0].match(/^\s*([^\d+-]*?)\s*(?=[+-]?\d|$)/);
+      const label = (first ? first[1] : "").trim();
+      segs[0] = segs[0].slice(first ? first[0].length : 0);
+      const vals = [];
+      for (const sg of segs) { const t = sg.match(/[+-]?\d+/g) || []; if (t.length >= 3) vals.push(...t.map(Number)); }
+      return { label, vals };
+    };
+    for (const raw of lines) {
+      const line = raw.replace(/\t/g, " ").trim();
+      if (!line || /^[-=_\s|+]+$/.test(line)) continue;            // 구분선
+      if (!line.includes("|")) { out.push(line); continue; }
+      const { label, vals } = holeVals(line);
+      if (/^(hole|홀)$/i.test(label)) { order = vals.filter((v) => v >= 1 && v <= 18); continue; }
+      const byHole = (v) => (order && order.length === v.length ? v.map((x, i) => [order[i], x]) : v.map((x, i) => [i + 1, x]));
+      if (/^(par|파)$/i.test(label)) { for (const [h, v] of byHole(vals)) if (v >= 3 && v <= 6) pars[h] = v; continue; }
+      if (!vals.length) { if (label) out.push(label); continue; }
+      const sorted = byHole(vals).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+      out.push(`${label} ${sorted.join(" ")}`.trim());
+    }
+    return { text: out.join("\n"), pars };
+  }
+
   /* text → [{ name, front, back, total, holes, warnings }]
    * pars: { 홀번호: par } — 내 라운드의 Par. +/-로 적은 줄을 타수로 바꿀 때 쓴다.
    * opts.skipScore: 「Score」 줄은 내 것으로 보고 건너뛴다(스마트스코어 붙여넣기 등록 화면). */
   function parse(text, pars = {}, opts = {}) {
+    // 표 형태면 먼저 한 줄 형태로 바꾸고, 표의 PAR는 내 라운드 Par가 없는 홀에만 쓴다
+    const T = normalizeTable(text);
+    text = T.text;
+    pars = { ...T.pars, ...Object.fromEntries(Object.entries(pars || {}).filter(([, v]) => isNum(v))) };
     const chunks = [];   // 이름 순서대로 [{ name, nums }]
     let pending = "", unnamed = 0;
     for (let line of String(text || "").replace(/\r/g, "").split("\n")) {
@@ -194,7 +236,7 @@ const Companions = (() => {
 
   /* 사진 글자 읽기(OCR). 이 기기 브라우저 안에서 처리한다(사진을 다른 서버로 보내지 않음).
    * 처음 한 번 인식 프로그램과 한글·영문 글자 데이터(수 MB)를 받아 온다. */
-  const OCR_LIB = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+  const OCR_LIB = "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js";
   async function ocr(file, onProgress) {
     if (!window.Tesseract) {
       await new Promise((ok, no) => { const s = document.createElement("script"); s.src = OCR_LIB; s.onload = ok; s.onerror = () => no(new Error("글자 인식 프로그램을 받지 못했습니다(인터넷 연결 확인).")); document.head.appendChild(s); });
