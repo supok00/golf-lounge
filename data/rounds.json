@@ -9189,310 +9189,317 @@
  },
  {
   "id": "r20261030-mvp48i11",
-  "date": "2026-10-30",
-  "course": "로제비앙cc",
-  "front": "비앙",
-  "back": "로제",
   "tee": "White",
-  "region": "경기",
+  "back": "로제",
+  "date": "2026-10-30",
+  "kind": "personal",
   "memo": "맑음",
+  "time": "06:18",
+  "front": "비앙",
+  "group": "",
   "holes": [
    {
     "h": 1,
-    "par": 4,
-    "dist": 318,
-    "hcp": 5,
-    "score": 1,
-    "putts": 2,
-    "drive": 220,
     "fp": 5,
-    "pen": 0,
-    "ong": 3,
-    "sg": 0,
     "fw": 0,
-    "miss": "-",
-    "gmiss": "길음",
+    "sg": 0,
+    "hcp": 5,
+    "ong": 3,
+    "par": 4,
+    "pen": 0,
     "appr": 8,
-    "memo": "100남았는데 실제 90남아서 50도로 쳤는데 홀 넘어 길게 떨어짐. 100미터 간듯 이날 10~20미터 길게 클럽이 맞음"
+    "dist": 318,
+    "memo": "100남았는데 실제 90남아서 50도로 쳤는데 홀 넘어 길게 떨어짐. 100미터 간듯 이날 10~20미터 길게 클럽이 맞음",
+    "miss": "-",
+    "drive": 220,
+    "gmiss": "길음",
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 2,
-    "par": 4,
-    "dist": 308,
-    "hcp": 7,
-    "drive": 200,
-    "memo": "110  p 컨 오바",
-    "fw": 1,
-    "miss": "-",
-    "putts": 2,
-    "ong": 3,
-    "sg": 0,
     "fp": 5,
-    "gmiss": "길음",
+    "fw": 1,
+    "sg": 0,
+    "hcp": 7,
+    "ong": 3,
+    "par": 4,
+    "pen": 0,
     "appr": 10,
-    "score": 1,
-    "pen": 0
+    "dist": 308,
+    "memo": "110  p 컨 오바",
+    "miss": "-",
+    "drive": 200,
+    "gmiss": "길음",
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 3,
-    "par": 5,
-    "dist": 480,
-    "hcp": 2,
-    "drive": 220,
-    "fw": 1,
-    "ong": 4,
-    "memo": "7 탑팅",
-    "putts": 2,
-    "sg": 0,
-    "miss": "-",
     "fp": 5,
-    "score": 1,
+    "fw": 1,
+    "sg": 0,
+    "hcp": 2,
+    "ong": 4,
+    "par": 5,
     "pen": 0,
+    "appr": 60,
+    "dist": 480,
+    "memo": "7 탑팅",
+    "miss": "-",
+    "drive": 220,
     "gmiss": "-",
-    "appr": 60
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 4,
-    "par": 3,
-    "dist": 179,
+    "fp": 15,
     "hcp": 6,
-    "score": 0,
-    "pen": 0,
-    "putts": 2,
     "ong": 1,
-    "gmiss": "-",
+    "par": 3,
+    "pen": 0,
+    "dist": 179,
     "drive": 140,
-    "fp": 15
+    "gmiss": "-",
+    "putts": 2,
+    "score": 0
    },
    {
     "h": 5,
-    "par": 4,
-    "dist": 372,
-    "hcp": 1,
-    "fw": 0,
-    "miss": "R",
-    "score": 1,
-    "pen": 0,
-    "putts": 2,
-    "ong": 3,
-    "sg": 0,
-    "drive": 200,
     "fp": 16,
+    "fw": 0,
+    "sg": 0,
+    "hcp": 1,
+    "ong": 3,
+    "par": 4,
+    "pen": 0,
+    "dist": 372,
+    "memo": "오 슬",
+    "miss": "R",
+    "drive": 200,
     "gmiss": "-",
-    "memo": "오 슬"
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 6,
-    "par": 4,
-    "dist": 322,
-    "hcp": 4,
-    "fw": 0,
-    "drive": 190,
-    "memo": "티샷 오늘쪽 푸시로 언덕쪽으로 감. 안보임.7번 탑핑,  그린 오른쪽 길게 감.,",
-    "putts": 3,
-    "ong": 3,
-    "sg": 0,
     "fp": 5,
-    "score": 2,
+    "fw": 0,
+    "sg": 0,
+    "hcp": 4,
+    "ong": 3,
+    "par": 4,
     "pen": 1,
+    "appr": 15,
+    "dist": 322,
+    "memo": "티샷 오늘쪽 푸시로 언덕쪽으로 감. 안보임.7번 탑핑,  그린 오른쪽 길게 감.,",
     "miss": "R",
+    "drive": 190,
     "gmiss": "길음",
-    "appr": 15
+    "putts": 3,
+    "score": 2
    },
    {
     "h": 7,
-    "par": 3,
-    "dist": 148,
-    "hcp": 9,
-    "score": 1,
-    "pen": 0,
-    "putts": 3,
-    "ong": 1,
-    "gmiss": "-",
     "fp": 12,
-    "memo": "첫펏 짤"
+    "hcp": 9,
+    "ong": 1,
+    "par": 3,
+    "pen": 0,
+    "dist": 148,
+    "memo": "첫펏 짤",
+    "gmiss": "-",
+    "putts": 3,
+    "score": 1
    },
    {
     "h": 8,
-    "par": 5,
-    "dist": 440,
-    "hcp": 8,
-    "score": 2,
-    "pen": 1,
-    "putts": 2,
-    "ong": 5,
-    "sg": 1,
-    "fw": 0,
-    "drive": 240,
     "fp": 2,
-    "gmiss": "길음",
+    "fw": 0,
+    "sg": 1,
+    "hcp": 8,
+    "ong": 5,
+    "par": 5,
+    "pen": 1,
     "appr": 15,
-    "memo": "200미터 남은 상황 4번으로 무리하게 시도. 왼쪽 으로 공이 말리면서 해저드로 튀어서 들어감, 4온 가능했으나 해저드앞 길게 떨어져서 그린 넘어감. 그래서 5온"
+    "dist": 440,
+    "memo": "200미터 남은 상황 4번으로 무리하게 시도. 왼쪽 으로 공이 말리면서 해저드로 튀어서 들어감, 4온 가능했으나 해저드앞 길게 떨어져서 그린 넘어감. 그래서 5온",
+    "drive": 240,
+    "gmiss": "길음",
+    "putts": 2,
+    "score": 2
    },
    {
     "h": 9,
-    "par": 4,
-    "dist": 321,
-    "hcp": 3,
-    "score": 0,
-    "pen": 0,
-    "putts": 2,
-    "ong": 2,
-    "gmiss": "-",
+    "fp": 2,
     "fw": 1,
+    "hcp": 3,
+    "ong": 2,
+    "par": 4,
+    "pen": 0,
+    "appr": 50,
+    "dist": 321,
+    "memo": "펏 아깝",
     "miss": "-",
     "drive": 270,
-    "fp": 2,
-    "appr": 50,
-    "memo": "펏 아깝"
+    "gmiss": "-",
+    "putts": 2,
+    "score": 0
    },
    {
     "h": 10,
-    "par": 4,
-    "dist": 309,
-    "hcp": 2,
-    "score": 1,
-    "pen": 0,
-    "putts": 2,
-    "ong": 3,
-    "sg": 0,
-    "drive": 264,
     "fp": 4,
-    "gmiss": "길음",
-    "appr": 16,
-    "memo": "135미터 남았는데 7번으로세컨. 길어서 어프로치 함.",
     "fw": 1,
-    "miss": "-"
+    "sg": 0,
+    "hcp": 2,
+    "ong": 3,
+    "par": 4,
+    "pen": 0,
+    "appr": 16,
+    "dist": 309,
+    "memo": "135미터 남았는데 7번으로세컨. 길어서 어프로치 함.",
+    "miss": "-",
+    "drive": 264,
+    "gmiss": "길음",
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 11,
-    "par": 4,
-    "dist": 353,
-    "hcp": 6,
-    "score": 0,
-    "pen": 0,
-    "putts": 2,
-    "ong": 2,
-    "gmiss": "-",
-    "drive": 260,
     "fp": 2,
     "fw": 1,
+    "hcp": 6,
+    "ong": 2,
+    "par": 4,
+    "pen": 0,
+    "dist": 353,
+    "memo": "2미터 퍼팅 미스. 빗나감.",
     "miss": "-",
-    "memo": "2미터 퍼팅 미스. 빗나감."
+    "drive": 260,
+    "gmiss": "-",
+    "putts": 2,
+    "score": 0
    },
    {
     "h": 12,
-    "par": 3,
-    "dist": 154,
-    "hcp": 8,
-    "score": 0,
-    "pen": 0,
-    "putts": 2,
-    "ong": 1,
-    "gmiss": "-",
     "fp": 9,
-    "memo": "홀컵보다 좀 길게 침"
+    "hcp": 8,
+    "ong": 1,
+    "par": 3,
+    "pen": 0,
+    "dist": 154,
+    "memo": "홀컵보다 좀 길게 침",
+    "gmiss": "-",
+    "putts": 2,
+    "score": 0
    },
    {
     "h": 13,
-    "par": 4,
-    "dist": 314,
-    "hcp": 7,
-    "score": 1,
-    "pen": 0,
-    "putts": 3,
-    "ong": 2,
-    "gmiss": "-",
-    "drive": 224,
     "fp": 8,
-    "memo": "90미터 남고 2온. 3퍼트",
     "fw": 1,
-    "miss": "-"
+    "hcp": 7,
+    "ong": 2,
+    "par": 4,
+    "pen": 0,
+    "dist": 314,
+    "memo": "90미터 남고 2온. 3퍼트",
+    "miss": "-",
+    "drive": 224,
+    "gmiss": "-",
+    "putts": 3,
+    "score": 1
    },
    {
     "h": 14,
-    "par": 5,
-    "dist": 506,
-    "hcp": 3,
-    "drive": 206,
-    "ong": 4,
     "fp": 5,
-    "score": 1,
-    "pen": 0,
-    "putts": 2,
-    "sg": 0,
-    "gmiss": "짧음",
-    "appr": 20,
-    "bunker": 1,
-    "memo": "300남았고, 4번 잘 쳤는데 9번 남은 거리 120정도? 뒷땅으로 그린 앞 벙거 들어감. 다행히 벙커 1번에 탈출",
     "fw": 1,
-    "miss": "-"
+    "sg": 0,
+    "hcp": 3,
+    "ong": 4,
+    "par": 5,
+    "pen": 0,
+    "appr": 20,
+    "dist": 506,
+    "memo": "300남았고, 4번 잘 쳤는데 9번 남은 거리 120정도? 뒷땅으로 그린 앞 벙거 들어감. 다행히 벙커 1번에 탈출",
+    "miss": "-",
+    "drive": 206,
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 1,
+    "bunker": 1
    },
    {
     "h": 15,
-    "par": 3,
-    "dist": 145,
-    "hcp": 9,
-    "score": 1,
-    "pen": 0,
-    "putts": 2,
-    "ong": 2,
-    "sg": 0,
     "fp": 5,
-    "gmiss": "짧음",
+    "sg": 0,
+    "hcp": 9,
+    "ong": 2,
+    "par": 3,
+    "pen": 0,
     "appr": 16,
-    "memo": "그린 짧게 떨어짐."
+    "dist": 145,
+    "memo": "그린 짧게 떨어짐.",
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 16,
-    "par": 4,
-    "dist": 343,
-    "hcp": 1,
-    "score": 1,
-    "pen": 0,
-    "putts": 2,
-    "ong": 3,
-    "sg": 0,
-    "drive": 230,
     "fp": 8,
-    "gmiss": "길음",
-    "appr": 115,
-    "memo": "115 미터남아서 피칭으로 세컨 하였으나 길어서 넘어감.  이날 8번 부터 세컨 거리가 10~20미터 길게 감",
     "fw": 1,
-    "miss": "-"
+    "sg": 0,
+    "hcp": 1,
+    "ong": 3,
+    "par": 4,
+    "pen": 0,
+    "appr": 115,
+    "dist": 343,
+    "memo": "115 미터남아서 피칭으로 세컨 하였으나 길어서 넘어감.  이날 8번 부터 세컨 거리가 10~20미터 길게 감",
+    "miss": "-",
+    "drive": 230,
+    "gmiss": "길음",
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 17,
-    "par": 4,
-    "dist": 323,
-    "hcp": 5,
-    "drive": 190,
     "fp": 2,
-    "score": 0,
-    "pen": 0,
-    "putts": 2,
-    "ong": 2,
-    "gmiss": "-",
-    "memo": "135미터 남은 거리 홀 2미터살짝 왼쪽",
     "fw": 1,
-    "miss": "-"
+    "hcp": 5,
+    "ong": 2,
+    "par": 4,
+    "pen": 0,
+    "dist": 323,
+    "memo": "135미터 남은 거리 홀 2미터살짝 왼쪽",
+    "miss": "-",
+    "drive": 190,
+    "gmiss": "-",
+    "putts": 2,
+    "score": 0
    },
    {
     "h": 18,
-    "par": 5,
-    "dist": 478,
+    "fp": 6,
+    "fw": 0,
     "hcp": 4,
     "ong": 3,
-    "drive": 200,
-    "score": 0,
+    "par": 5,
     "pen": 0,
-    "putts": 2,
-    "fp": 6,
-    "gmiss": "-",
+    "dist": 478,
     "memo": "170남은 써드샷 6번으로 온.",
-    "fw": 0
+    "drive": 200,
+    "gmiss": "-",
+    "putts": 2,
+    "score": 0
    }
   ],
+  "course": "로제비앙cc",
+  "photos": [
+   "data/photos/r20261030-mvp48i11-mvw37pas0.jpg"
+  ],
+  "region": "경기",
+  "groupId": "",
   "companions": [
    {
     "name": "이훈연",
@@ -9725,252 +9732,699 @@
      }
     ]
    }
-  ],
-  "photos": [
-   "data/photos/r20261030-mvp48i11-mvw37pas0.jpg"
   ]
  },
  {
   "id": "r20261106-plan",
-  "date": "2026-11-06",
-  "course": "아시아나CC",
-  "front": "동",
-  "back": "동",
   "tee": "White",
-  "region": "경기",
-  "memo": "",
-  "planned": true,
+  "back": "동in",
+  "date": "2026-11-06",
+  "kind": "personal",
+  "memo": "맑음(기온 쌀쌀)",
+  "time": "07:30",
+  "front": "동out",
+  "group": "",
   "holes": [
    {
     "h": 1,
+    "fp": 6,
+    "fw": 0,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 15,
+    "ong": 3,
     "par": 4,
+    "pen": 0,
+    "appr": 20,
     "dist": 352,
-    "hcp": 15
+    "memo": "어프로치 까서 2온 미스",
+    "drive": 180,
+    "gmiss": "우",
+    "putts": 2,
+    "score": 1
    },
    {
     "h": 2,
+    "fw": 0,
+    "ob": 0,
+    "sg": 1,
+    "hcp": 11,
+    "ong": 3,
     "par": 4,
-    "dist": 315,
-    "hcp": 11
+    "pen": 0,
+    "appr": 15,
+    "dist": 345,
+    "memo": "세컨 오른쪽 짧았는데 땅맞고 벙커로 , 1번에 탈출.",
+    "drive": 200,
+    "gmiss": "우",
+    "putts": 1,
+    "score": 0,
+    "bunker": 1
    },
    {
     "h": 3,
+    "fp": 6,
+    "ob": 0,
+    "hcp": 5,
+    "ong": 2,
     "par": 4,
-    "dist": 361,
-    "hcp": 5
+    "pen": 0,
+    "dist": 395,
+    "drive": 245,
+    "gmiss": "우",
+    "putts": 2,
+    "score": 0,
+    "bunker": 0
    },
    {
     "h": 4,
+    "fp": 8,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 1,
+    "ong": 4,
     "par": 5,
-    "dist": 471,
-    "hcp": 1
+    "pen": 0,
+    "appr": 15,
+    "dist": 515,
+    "drive": 180,
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 5,
+    "fp": 10,
+    "fw": 0,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 7,
+    "ong": 4,
     "par": 4,
-    "dist": 338,
-    "hcp": 7
+    "pen": 1,
+    "dist": 370,
+    "memo": "세컨 8번 발끝 내리막 라이, 오른쪽 슬라이스 우려로왼쪽을 더 봄. 당겨져서 산으로 감. 벌타 1",
+    "miss": "-",
+    "drive": 200,
+    "putts": 2,
+    "score": 2,
+    "bunker": 0
    },
    {
     "h": 6,
+    "fp": 4,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 17,
+    "ong": 2,
     "par": 3,
-    "dist": 142,
-    "hcp": 17
+    "pen": 0,
+    "appr": 15,
+    "dist": 155,
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 7,
+    "fp": 7,
+    "fw": 0,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 3,
+    "ong": 4,
     "par": 5,
-    "dist": 430,
-    "hcp": 3
+    "pen": 0,
+    "appr": 140,
+    "dist": 470,
+    "memo": "내리막 7미터 인데 거리감 실패로 많이 지나감, 2번째 오르막 조금 잛아서 쓰리 퍼트",
+    "drive": 150,
+    "gmiss": "-",
+    "putts": 3,
+    "score": 2,
+    "bunker": 0
    },
    {
     "h": 8,
+    "fp": 6,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 13,
+    "ong": 4,
     "par": 3,
-    "dist": 146,
-    "hcp": 13
+    "pen": 0,
+    "appr": 40,
+    "dist": 160,
+    "memo": "티샷 짧아서 그린앞 벙커, 벙커 첫 시도 실패 2번째 나옴. 그린 엣지 내리막에 걸려서 다시 어프로치 하면서 퍼트",
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 3,
+    "bunker": 2
    },
    {
     "h": 9,
+    "fp": 10,
+    "fw": 1,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 9,
+    "ong": 3,
     "par": 4,
-    "dist": 306,
-    "hcp": 9
+    "pen": 0,
+    "appr": 30,
+    "dist": 335,
+    "memo": "세컨 샷 바위 맞고 왼쪽으로 튐. 안보여서 30미터 어프로치",
+    "miss": "-",
+    "drive": 190,
+    "gmiss": "좌",
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 10,
+    "fp": 6,
+    "fw": 1,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 8,
+    "ong": 4,
     "par": 5,
-    "dist": 443,
-    "hcp": 8
+    "pen": 0,
+    "appr": 20,
+    "dist": 485,
+    "memo": "드라이브 끝에 맞고 뜸. 세번째 샷 짧아서 어프로치로 4온",
+    "miss": "-",
+    "drive": 180,
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 11,
+    "fp": 5,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 14,
+    "ong": 2,
     "par": 3,
-    "dist": 165,
-    "hcp": 14
+    "pen": 0,
+    "appr": 40,
+    "dist": 180,
+    "memo": "파3 짧아 40미터 남아 어프로치로 2온 후 2퍼트",
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 12,
+    "fp": 10,
+    "fw": 0,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 4,
+    "ong": 3,
     "par": 4,
-    "dist": 379,
-    "hcp": 4
+    "pen": 0,
+    "appr": 85,
+    "dist": 415,
+    "memo": "티샷 오른쪽으로 밀려서 세컨이 많이 남음",
+    "miss": "-",
+    "drive": 190,
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 13,
+    "fp": 3,
+    "fw": 0,
+    "ob": 0,
+    "hcp": 16,
+    "ong": 2,
     "par": 4,
-    "dist": 233,
-    "hcp": 16
+    "pen": 0,
+    "dist": 255,
+    "memo": "오른쪽 밀려서 90남음. 3퍼트",
+    "miss": "-",
+    "drive": 165,
+    "gmiss": "-",
+    "putts": 3,
+    "score": 1
    },
    {
     "h": 14,
+    "fp": 4,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 6,
+    "ong": 5,
     "par": 4,
-    "dist": 379,
-    "hcp": 6
+    "pen": 0,
+    "appr": 20,
+    "dist": 415,
+    "memo": "어프로치 그린 뒤로 감. 라이 불안으로 어프로치 3번.",
+    "drive": 240,
+    "gmiss": "길음",
+    "putts": 2,
+    "score": 3,
+    "bunker": 0
    },
    {
     "h": 15,
+    "fp": 14,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 2,
+    "ong": 4,
     "par": 5,
-    "dist": 526,
-    "hcp": 2
+    "pen": 0,
+    "dist": 575,
+    "memo": "오른쪽 밀림",
+    "drive": 200,
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 16,
+    "fp": 6,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 18,
+    "ong": 2,
     "par": 3,
-    "dist": 123,
-    "hcp": 18
+    "pen": 0,
+    "appr": 20,
+    "dist": 135,
+    "memo": "티샷 길어서 어프로치",
+    "gmiss": "길음",
+    "putts": 2,
+    "score": 1,
+    "bunker": 0
    },
    {
     "h": 17,
+    "fp": 5,
+    "ob": 0,
+    "sg": 0,
+    "hcp": 10,
+    "ong": 4,
     "par": 4,
-    "dist": 352,
-    "hcp": 10
+    "pen": 0,
+    "appr": 15,
+    "dist": 385,
+    "memo": "세컨 짧게 떨어짐. 어프로치 58 짧게 떨어짐",
+    "drive": 217,
+    "gmiss": "짧음",
+    "putts": 2,
+    "score": 2,
+    "bunker": 0
    },
    {
     "h": 18,
+    "fp": 1,
+    "fw": 0,
+    "ob": 0,
+    "sg": 1,
+    "hcp": 12,
+    "ong": 4,
     "par": 4,
-    "dist": 320,
-    "hcp": 12
+    "pen": 0,
+    "dist": 350,
+    "memo": "어프로치 에러로 온그린 문제됨",
+    "drive": 240,
+    "putts": 1,
+    "score": 1,
+    "bunker": 0
+   }
+  ],
+  "course": "아시아나CC",
+  "region": "경기",
+  "groupId": "",
+  "companions": [
+   {
+    "name": "이*성",
+    "holes": [
+     {
+      "h": 1,
+      "st": 6
+     },
+     {
+      "h": 2,
+      "st": 6
+     },
+     {
+      "h": 3,
+      "st": 4
+     },
+     {
+      "h": 4,
+      "st": 8
+     },
+     {
+      "h": 5,
+      "st": 5
+     },
+     {
+      "h": 6,
+      "st": 3
+     },
+     {
+      "h": 7,
+      "st": 6
+     },
+     {
+      "h": 8,
+      "st": 4
+     },
+     {
+      "h": 9,
+      "st": 6
+     },
+     {
+      "h": 10,
+      "st": 5
+     },
+     {
+      "h": 11,
+      "st": 3
+     },
+     {
+      "h": 12,
+      "st": 6
+     },
+     {
+      "h": 13,
+      "st": 6
+     },
+     {
+      "h": 14,
+      "st": 5
+     },
+     {
+      "h": 15,
+      "st": 4
+     },
+     {
+      "h": 16,
+      "st": 5
+     },
+     {
+      "h": 17,
+      "st": 3
+     },
+     {
+      "h": 18,
+      "st": 4
+     }
+    ]
+   },
+   {
+    "name": "송*근",
+    "holes": [
+     {
+      "h": 1,
+      "st": 7
+     },
+     {
+      "h": 2,
+      "st": 7
+     },
+     {
+      "h": 3,
+      "st": 6
+     },
+     {
+      "h": 4,
+      "st": 7
+     },
+     {
+      "h": 5,
+      "st": 5
+     },
+     {
+      "h": 6,
+      "st": 5
+     },
+     {
+      "h": 7,
+      "st": 6
+     },
+     {
+      "h": 8,
+      "st": 5
+     },
+     {
+      "h": 9,
+      "st": 6
+     },
+     {
+      "h": 10,
+      "st": 5
+     },
+     {
+      "h": 11,
+      "st": 5
+     },
+     {
+      "h": 12,
+      "st": 7
+     },
+     {
+      "h": 13,
+      "st": 5
+     },
+     {
+      "h": 14,
+      "st": 8
+     },
+     {
+      "h": 15,
+      "st": 6
+     },
+     {
+      "h": 16,
+      "st": 4
+     },
+     {
+      "h": 17,
+      "st": 5
+     },
+     {
+      "h": 18,
+      "st": 5
+     }
+    ]
+   },
+   {
+    "name": "박*중",
+    "holes": [
+     {
+      "h": 1,
+      "st": 6
+     },
+     {
+      "h": 2,
+      "st": 6
+     },
+     {
+      "h": 3,
+      "st": 7
+     },
+     {
+      "h": 4,
+      "st": 6
+     },
+     {
+      "h": 5,
+      "st": 5
+     },
+     {
+      "h": 6,
+      "st": 6
+     },
+     {
+      "h": 7,
+      "st": 8
+     },
+     {
+      "h": 8,
+      "st": 6
+     },
+     {
+      "h": 9,
+      "st": 6
+     },
+     {
+      "h": 10,
+      "st": 5
+     },
+     {
+      "h": 11,
+      "st": 3
+     },
+     {
+      "h": 12,
+      "st": 7
+     },
+     {
+      "h": 13,
+      "st": 8
+     },
+     {
+      "h": 14,
+      "st": 6
+     },
+     {
+      "h": 15,
+      "st": 6
+     },
+     {
+      "h": 16,
+      "st": 5
+     },
+     {
+      "h": 17,
+      "st": 7
+     },
+     {
+      "h": 18,
+      "st": 6
+     }
+    ]
    }
   ]
  },
  {
   "id": "r20261110-plan",
-  "date": "2026-11-10",
-  "course": "비에이비스타CC",
-  "front": "보나",
-  "back": "호박",
   "tee": "White",
-  "region": "경기",
+  "back": "호박",
+  "date": "2026-11-10",
+  "kind": "personal",
   "memo": "",
-  "planned": true,
+  "time": "",
+  "front": "보나",
+  "group": "",
   "holes": [
    {
     "h": 1,
+    "hcp": 9,
     "par": 5,
-    "dist": 361,
-    "hcp": 9
+    "dist": 361
    },
    {
     "h": 2,
+    "hcp": 6,
     "par": 4,
-    "dist": 315,
-    "hcp": 6
+    "dist": 315
    },
    {
     "h": 3,
+    "hcp": 8,
     "par": 4,
-    "dist": 305,
-    "hcp": 8
+    "dist": 305
    },
    {
     "h": 4,
+    "hcp": 7,
     "par": 3,
-    "dist": 135,
-    "hcp": 7
+    "dist": 135
    },
    {
     "h": 5,
+    "hcp": 1,
     "par": 4,
-    "dist": 267,
-    "hcp": 1
+    "dist": 267
    },
    {
     "h": 6,
+    "hcp": 4,
     "par": 4,
-    "dist": 301,
-    "hcp": 4
+    "dist": 301
    },
    {
     "h": 7,
+    "hcp": 3,
     "par": 5,
-    "dist": 444,
-    "hcp": 3
+    "dist": 444
    },
    {
     "h": 8,
+    "hcp": 5,
     "par": 3,
-    "dist": 125,
-    "hcp": 5
+    "dist": 125
    },
    {
     "h": 9,
+    "hcp": 2,
     "par": 4,
-    "dist": 325,
-    "hcp": 2
+    "dist": 325
    },
    {
     "h": 10,
+    "hcp": 1,
     "par": 5,
-    "dist": 389,
-    "hcp": 1
+    "dist": 389
    },
    {
     "h": 11,
+    "hcp": 8,
     "par": 4,
-    "dist": 299,
-    "hcp": 8
+    "dist": 299
    },
    {
     "h": 12,
+    "hcp": 5,
     "par": 3,
-    "dist": 118,
-    "hcp": 5
+    "dist": 118
    },
    {
     "h": 13,
+    "hcp": 9,
     "par": 4,
-    "dist": 257,
-    "hcp": 9
+    "dist": 257
    },
    {
     "h": 14,
+    "hcp": 2,
     "par": 4,
-    "dist": 317,
-    "hcp": 2
+    "dist": 317
    },
    {
     "h": 15,
+    "hcp": 7,
     "par": 3,
-    "dist": 120,
-    "hcp": 7
+    "dist": 120
    },
    {
     "h": 16,
+    "hcp": 4,
     "par": 5,
-    "dist": 360,
-    "hcp": 4
+    "dist": 360
    },
    {
     "h": 17,
+    "hcp": 6,
     "par": 3,
-    "dist": 110,
-    "hcp": 6
+    "dist": 110
    },
    {
     "h": 18,
+    "hcp": 3,
     "par": 5,
-    "dist": 395,
-    "hcp": 3
+    "dist": 395
    }
-  ]
+  ],
+  "course": "비에이비스타CC",
+  "region": "경기",
+  "groupId": "",
+  "planned": true
  },
  {
   "id": "r20261113-plan",
