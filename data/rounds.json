@@ -10065,11 +10065,23 @@
    }
   ],
   "course": "아시아나CC",
+  "photos": [
+   "data/photos/r20261106-plan-mw50hc6y0.jpg",
+   "data/photos/r20261106-plan-mw50hca51.jpg",
+   "data/photos/r20261106-plan-mw50hcec2.jpg",
+   "data/photos/r20261106-plan-mw50hcim3.jpg",
+   "data/photos/r20261106-plan-mw50hcwk4.jpg",
+   "data/photos/r20261106-plan-mw50hd7o5.jpg",
+   "data/photos/r20261106-plan-mw50hdh46.jpg",
+   "data/photos/r20261106-plan-mw50hdng7.jpg",
+   "data/photos/r20261106-plan-mw50hds28.jpg",
+   "data/photos/r20261106-plan-mw50hdw99.jpg"
+  ],
   "region": "경기",
   "groupId": "",
   "companions": [
    {
-    "name": "이*성",
+    "name": "이배성",
     "holes": [
      {
       "h": 1,
@@ -10146,7 +10158,7 @@
     ]
    },
    {
-    "name": "송*근",
+    "name": "송대근",
     "holes": [
      {
       "h": 1,
@@ -10223,7 +10235,7 @@
     ]
    },
    {
-    "name": "박*중",
+    "name": "박범중",
     "holes": [
      {
       "h": 1,
