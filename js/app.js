@@ -394,7 +394,9 @@
     return true;
   }
   function frounds() {
-    const list = rounds.filter((r) => !r.planned && inPeriod(r.date || "") && (!F.course || String(r.course).includes(F.course)) && (!F.full || S.round(r).full));
+    // 오늘 이후 날짜의 라운드(예정 라운드에 미리 적어 본 값 등)는 아직 친 라운드가 아니므로 통계에서 뺀다
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    const list = rounds.filter((r) => !r.planned && String(r.date || "") <= today && inPeriod(r.date || "") && (!F.course || String(r.course).includes(F.course)) && (!F.full || S.round(r).full));
     // 「최근 라운드」: 골프장·18홀 조건에 맞는 라운드 중 가장 최근 1개만
     return F.period === "recent" ? S.byRecent(list).slice(0, 1) : list;
   }
@@ -817,7 +819,9 @@
     }
     for (const n of Object.keys(H)) {
       const d = derive(H[n]);
-      for (const [k, v] of Object.entries(d)) if (v !== null && H[n][k] === v) AUTO[n].add(k);
+      // 티샷 미스(miss)는 늘 직접 적은 값으로 본다. FW 안착과 서로를 자동 칸으로 잡으면, 그 홀의 다른 칸을 고칠 때
+      // 둘 다 「근거 없는 자동 칸」이 되어 함께 지워졌다(2026.11.07 11/06 라운드 9·10번 홀 FW 기록 사라짐)
+      for (const [k, v] of Object.entries(d)) if (v !== null && H[n][k] === v && k !== "miss") AUTO[n].add(k);
     }
     const courses = [...new Set(rounds.map((x) => x.course))].sort();
     const tees = [...new Set(["White", "Blue", "Black", "Red", "Gold", ...rounds.map((x) => x.tee).filter(Boolean)])];
