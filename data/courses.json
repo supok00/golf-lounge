@@ -755,5 +755,190 @@
     }
    }
   ]
+ },
+ {
+  "url": "https://www.midasgolf.co.kr/IC/TitanCourse",
+  "name": "마이다스레이크CC",
+  "alias": [
+   "마이다스레이크 이천",
+   "마이다스레이크 이천 골프앤리조트",
+   "마이다스레이크",
+   "마이다스 이천",
+   "마이다스레이크 CC",
+   "마이다스레이크cc",
+   "Midas Lake"
+  ],
+  "region": "경기 이천",
+  "source": "마이다스레이크 이천 홈페이지 코스 소개(타이탄·마이다스)에서 옮김(2026-11-12) — 공략은 홈페이지 내용을 요약, 홀 그림 저작권은 골프장",
+  "courses": [
+   {
+    "name": "타이탄",
+    "tees": {
+     "White": {
+      "note": "화이트 티 · 홈페이지 코스 소개의 5개 티 거리 중 3번째(홀 그림의 흰색 티 표시 — 뒤에서부터 블루·브라운·화이트·그린·레드) · 거리는 미터(홈페이지 표기)",
+      "green": "",
+      "holes": [
+       {
+        "h": 1,
+        "par": 4,
+        "hcp": 3,
+        "dist": 316,
+        "map": "data/courses/midaslake/c1_01.jpg",
+        "tip": "페어웨이 양쪽이 높고 가운데가 오목한 오르막 홀. 그린 앞 벙커를 피해 솟은 포대 그린을 공략."
+       },
+       {
+        "h": 2,
+        "par": 4,
+        "hcp": 8,
+        "dist": 322,
+        "map": "data/courses/midaslake/c1_02.jpg",
+        "tip": "공략 지점이 둘인 홀. 장타자는 풀숲 너머 벙커 오른쪽을 노릴 수 있지만 실패하면 큰 벌. 무리하지 말고 안전한 쪽으로."
+       },
+       {
+        "h": 3,
+        "par": 4,
+        "hcp": 7,
+        "dist": 340,
+        "map": "data/courses/midaslake/c1_03.jpg",
+        "tip": "높낮이 차이(약 20m)가 가장 큰 홀. 그린은 안전하게 공략."
+       },
+       {
+        "h": 4,
+        "par": 5,
+        "hcp": 2,
+        "dist": 480,
+        "map": "data/courses/midaslake/c1_04.jpg",
+        "tip": "오른쪽을 감아 도는 개울이 있는 도그렉 파5. 너무 멀리 치면 호수에 빠지니 거리 조절. (홈페이지 글엔 핸디캡 4로도 적힘)"
+       },
+       {
+        "h": 5,
+        "par": 3,
+        "hcp": 5,
+        "dist": 146,
+        "map": "data/courses/midaslake/c1_05.jpg",
+        "tip": "억새밭과 해저드를 넘기는 파3. 숲에 둘러싸인 그린, 짧지 않게."
+       },
+       {
+        "h": 6,
+        "par": 4,
+        "hcp": 6,
+        "dist": 312,
+        "map": "data/courses/midaslake/c1_06.jpg",
+        "tip": "숲을 끼고 도는 왼쪽 도그렉 파4. 돌아가는 공략이 유리, 욕심내면 큰 실수."
+       },
+       {
+        "h": 7,
+        "par": 4,
+        "hcp": 1,
+        "dist": 378,
+        "map": "data/courses/midaslake/c1_07.jpg",
+        "tip": "가장 긴 오르막 파4(핸디캡 1). 방심하면 벗어나기 어려우니 보기도 괜찮다는 생각으로."
+       },
+       {
+        "h": 8,
+        "par": 3,
+        "hcp": 9,
+        "dist": 126,
+        "map": "data/courses/midaslake/c1_08.jpg",
+        "tip": "가장 쉽고 짧은 파3. 보이는 것에 속지 말고 정직하게 핀 거리로."
+       },
+       {
+        "h": 9,
+        "par": 5,
+        "hcp": 4,
+        "dist": 460,
+        "map": "data/courses/midaslake/c1_09.jpg",
+        "tip": "넓은 페어웨이와 호수, 아일랜드 그린의 파5. 장타자는 두 번에 노릴 수 있지만 세 번에 끊어 가는 게 안전."
+       }
+      ]
+     }
+    },
+    "holes18": false
+   },
+   {
+    "name": "마이다스",
+    "tees": {
+     "White": {
+      "note": "화이트 티 · 홈페이지 코스 소개의 5개 티 거리 중 3번째(홀 그림의 흰색 티 표시 — 뒤에서부터 블루·브라운·화이트·그린·레드) · 거리는 미터(홈페이지 표기)",
+      "green": "",
+      "holes": [
+       {
+        "h": 1,
+        "par": 4,
+        "hcp": 2,
+        "dist": 346,
+        "map": "data/courses/midaslake/c2_01.jpg",
+        "tip": "페어웨이가 넓어 티샷은 편하지만 전장이 길고 그린이 까다로움. 핀 위치를 보고 공략."
+       },
+       {
+        "h": 2,
+        "par": 4,
+        "hcp": 4,
+        "dist": 334,
+        "map": "data/courses/midaslake/c2_02.jpg",
+        "tip": "왼쪽 도그렉. 장타자는 왼쪽 벙커를 넘기면 쉽지만, 실수하면 오른쪽 벙커나 밖으로 빠짐."
+       },
+       {
+        "h": 3,
+        "par": 3,
+        "hcp": 6,
+        "dist": 161,
+        "map": "data/courses/midaslake/c2_03.jpg",
+        "tip": "언덕 위 오르막 그린의 파3. 그린이 커서 거리감이 중요, 파가 쉽지 않음."
+       },
+       {
+        "h": 4,
+        "par": 5,
+        "hcp": 1,
+        "dist": 472,
+        "map": "data/courses/midaslake/c2_04.jpg",
+        "tip": "오르막 긴 파5(핸디캡 1). 세 번에 나눠 그린에 올리면 파 가능, 욕심내면 그린 주변 깊은 벙커."
+       },
+       {
+        "h": 5,
+        "par": 4,
+        "hcp": 9,
+        "dist": 283,
+        "map": "data/courses/midaslake/c2_05.jpg",
+        "tip": "짧은 파4. 티샷 욕심 내지 않으면 기회, 벙커와 오른쪽 해저드 조심."
+       },
+       {
+        "h": 6,
+        "par": 3,
+        "hcp": 8,
+        "dist": 127,
+        "map": "data/courses/midaslake/c2_06.jpg",
+        "tip": "숲과 호수가 어우러진 시그니처 파3."
+       },
+       {
+        "h": 7,
+        "par": 5,
+        "hcp": 3,
+        "dist": 479,
+        "map": "data/courses/midaslake/c2_07.jpg",
+        "tip": "장타자는 두 번에 노릴 수 있지만 벙커와 해저드가 곳곳에 있는 어려운 파5. 끊어 가기."
+       },
+       {
+        "h": 8,
+        "par": 4,
+        "hcp": 7,
+        "dist": 330,
+        "map": "data/courses/midaslake/c2_08.jpg",
+        "tip": "길게 펼쳐진 웨이스트 벙커를 따라가는 홀. 방향이 중요."
+       },
+       {
+        "h": 9,
+        "par": 4,
+        "hcp": 5,
+        "dist": 356,
+        "map": "data/courses/midaslake/c2_09.jpg",
+        "tip": "가장 긴 파4. 거리와 정확성 모두 필요한 마지막 홀."
+       }
+      ]
+     }
+    },
+    "holes18": false
+   }
+  ]
  }
 ]
