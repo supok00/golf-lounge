@@ -743,13 +743,18 @@
     gmiss: "그린을 놓친 방향", appr: "그린을 놓쳤을 때 핀까지 남은 거리",
   };
 
-  function inputView(id) {
+  function inputView(id, opt = {}) {
     const edit = id ? rounds.find((r) => r.id === id) : null;
     if (id && !edit) { app.innerHTML = `<p>라운드를 찾을 수 없습니다. <a href="#/rounds">목록으로</a></p>`; return; }
     const draftKey = KEY_DRAFT + (edit ? ":" + edit.id : ":new");
-    const draft = ls.get(draftKey);
+    /* 임시 저장본(이 기기)은 만들 때의 서버 홀 기록(baseSig)이 지금과 같을 때만 자동으로 불러온다.
+     * 그 뒤 다른 기기·탭에서 저장해 서버가 바뀌었으면 서버 기록을 열고, 임시 저장본은 「예전 입력 불러오기」로만 — 오래된 임시본이 최신 기록을 덮어쓰지 않게(2026-11-11 비에이비스타 사고) */
+    const holeSig = (x) => JSON.stringify(x?.holes || []);
+    const draftRaw = ls.get(draftKey);
+    const draftStale = !!(edit && draftRaw && draftRaw.holes && !opt.useDraft && draftRaw.baseSig !== holeSig(edit));
+    const draft = draftRaw && draftRaw.holes && !draftStale ? draftRaw : null;
     const base = edit ? structuredClone(edit) : { date: new Date().toISOString().slice(0, 10), course: "", front: "", back: "", tee: "White", region: "", memo: "", holes: [] };
-    let r = draft && draft.holes ? draft : base;
+    let r = draft || base;
     // 라운드 사진: 저장된 것은 경로, 새로 고른 것은 줄인 사진(dataUrl·b64). 새 사진은 따로 임시 저장(용량이 커서 실패하면 넘어감)
     const photoKey = draftKey + ":photos";
     const photoSt = { photos: (edit?.photos || []).map((path) => ({ path })), removed: [] };
@@ -830,7 +835,7 @@
     app.innerHTML = `
       <h2>${edit ? "라운드 수정" : "라운드 입력"}</h2>
       ${G.canWrite() ? "" : SRV ? `<div class="notice">로그인해야 저장할 수 있습니다. 입력 내용은 이 기기에 임시 저장됩니다.</div>` : `<div class="notice">지금은 <b>읽기 전용</b>입니다. 저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요. 입력 내용은 이 기기에 임시 저장됩니다.</div>`}
-      ${draft ? `<div class="notice" style="margin-top:8px">이전에 입력하던 내용을 불러왔습니다. <button class="link" id="bDiscard" type="button">버리고 새로 시작</button></div>` : ""}
+      ${draft ? `<div class="notice" style="margin-top:8px">이전에 입력하던 내용을 불러왔습니다. <button class="link" id="bDiscard" type="button">버리고 새로 시작</button></div>` : draftStale ? `<div class="notice" style="margin-top:8px">이 기기에 예전에 입력하다 만 내용이 있지만, 그 뒤 다른 곳에서 이 라운드가 저장되어 <b>최신 저장 기록</b>을 열었습니다. <button class="link" id="bUseDraft" type="button">예전 입력 불러오기</button> · <button class="link" id="bDiscard" type="button">예전 입력 버리기</button></div>` : ""}
       <div class="card" style="margin-top:12px">
         <div class="form">
           <label class="f">날짜<input id="fDate" type="date" value="${esc(r.date)}"></label>
@@ -888,7 +893,7 @@
     };
     const meta = () => ({ date: $("fDate").value, time: $("fTime").value, course: $("fCourse").value.trim(), front: $("fFront").value.trim(), back: $("fBack").value.trim(), tee: $("fTee").value.trim(), region: $("fRegion").value, memo: $("fMemo").value.trim(), ...kindMeta() });
     const holesArr = () => Object.values(H).map((h) => Object.fromEntries(Object.entries(h).filter(([, v]) => v !== "" && v !== null && v !== undefined))).filter((h) => Object.keys(h).length > 1);
-    const saveDraft = () => ls.set(draftKey, { ...meta(), id: edit?.id, holes: holesArr(), companions: compSt.comps.filter((c) => c.name.trim()).map(cleanComp) });
+    const saveDraft = () => ls.set(draftKey, { ...meta(), id: edit?.id, baseSig: edit ? holeSig(edit) : undefined, holes: holesArr(), companions: compSt.comps.filter((c) => c.name.trim()).map(cleanComp) });
 
     function field([k, lab, type, opts]) {
       const v = H[cur][k];
@@ -1039,6 +1044,7 @@
     });
     $("bPrev").onclick = () => { cur = cur === 1 ? 18 : cur - 1; drawAll(); };
     $("bNext").onclick = () => { cur = cur === 18 ? 1 : cur + 1; drawAll(); };
+    if ($("bUseDraft")) $("bUseDraft").onclick = () => { if (confirm("예전에 입력하다 만 내용을 불러올까요? 저장하면 지금 저장된 홀 기록을 덮어씁니다.")) inputView(id, { useDraft: true }); };
     if ($("bDiscard")) $("bDiscard").onclick = () => { ls.del(draftKey); ls.del(photoKey); inputView(id); };
     function drawPhotos() {
       const n = photoSt.photos.length, fresh = photoSt.photos.filter((p) => p.dataUrl).length;
@@ -1138,6 +1144,8 @@
         $("bSave").textContent = "저장 중…";
         await commit((data) => {
           const i = data.findIndex((x) => x.id === obj.id);
+          // 이 화면을 연 뒤 다른 기기·탭에서 홀 기록이 바뀌었으면 덮어쓰지 않는다(입력 내용은 이 기기 임시 저장에 남음)
+          if (i >= 0 && edit && holeSig(data[i]) !== holeSig(edit)) throw new Error("이 화면을 연 뒤 다른 기기나 탭에서 이 라운드의 홀 기록이 바뀌어 저장하지 않았습니다. 지금 입력은 이 기기에 임시 저장돼 있습니다. 새로고침해서 최신 기록을 확인한 뒤 다시 저장하세요.");
           if (i >= 0) data[i] = obj; else data.push(obj);
           return data.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         }, `${planned ? "예정 라운드" : edit ? "라운드 수정" : "라운드 추가"}: ${m.date} ${m.course}`);
