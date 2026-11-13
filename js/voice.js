@@ -122,8 +122,24 @@ const Voice = (() => {
   }
 
   /* 전체 문장 → [{ hole, set, said, rest }] (홀 번호가 여러 개면 나눠서), nav: 'next'|'prev'|번호 */
+  /* 음성 인식이 자주 틀리게 받아쓰는 골프 낱말 바로잡기(영어로 받아쓴 것 포함) */
+  const FIX = [
+    [/\b(?:par|pa)\s*(\d)/gi, "파$1"], [/\bbirdie\b/gi, "버디"], [/\bbogey\b/gi, "보기"], [/\bdouble\b/gi, "더블"], [/\btriple\b/gi, "트리플"], [/\beagle\b/gi, "이글"],
+    [/\b(one|two|three|four)\s*putts?\b/gi, (_, n) => ({ one: 1, two: 2, three: 3, four: 4 })[n.toLowerCase()] + "퍼트"], [/\bputts?\b/gi, "퍼트"], [/\bfairway\b/gi, "페어웨이"], [/\bhazard\b/gi, "해저드"], [/\bbunker\b/gi, "벙커"],
+    [/\bo\.?\s?b\b/gi, "OB"], [/오\s?비(?![가-힣])|오빠(?=\s*\d|\s*하나|\s*한)/g, "OB"],
+    [/버드|바디|버티|벌디/g, "버디"], [/보귀|보게|복이/g, "보기"], [/더블\s*보귀/g, "더블"], [/트리풀|츄리플|트리블/g, "트리플"],
+    [/퍼터|버트|펏트|퍼드|퍼뜨/g, "퍼트"], [/(\d)\s*퍼트/g, "$1퍼트"],
+    [/패어\s*웨이|페어\s+웨이|페이\s*웨이|페아웨이|패어웨이/g, "페어웨이"],
+    [/핸디\s+캡|핸드\s*캡|핸디켑|핸디 켑|헨디캡|핸디캅/g, "핸디캡"], [/헤저드|해저트|해져드|헤져드/g, "해저드"],
+    [/슬라이드(?=\s|$)|슬라이즈/g, "슬라이스"], [/어프로취|에프로치|어프로 치/g, "어프로치"], [/벙거|번커|벙크/g, "벙커"],
+    [/티\s*셧|티\s*쌋|T\s*샷|t\s*샷|티\s+샷/g, "티샷"], [/오늘\s*쪽|오른\s+쪽/g, "오른쪽"], [/왼\s+쪽/g, "왼쪽"],
+    [/(\d)\s*번\s*(?:홀|올|호|훌)(?![가-힣])/g, "$1번 홀"], [/(\d)\s*(?:올|훌)(?![가-힣])/g, "$1번 홀"],
+    [/양\s+파/g, "양파"], [/파\s*쓰리|파\s*3/g, "파3"], [/파\s*포(?![가-힣])|파\s*4/g, "파4"], [/파\s*파이브|파\s*5/g, "파5"],
+  ];
+  const fixWords = (t) => FIX.reduce((x, [re, to]) => x.replace(re, to), t);
+
   function parse(raw, ctx) {
-    let t = normNumbers(String(raw || "").replace(/\s+/g, " ").trim());
+    let t = normNumbers(fixWords(String(raw || "").replace(/\s+/g, " ").trim()));
     const out = { parts: [], nav: null };
     if (/^(다음\s*홀|넥스트)$/.test(t)) return { ...out, nav: "next" };
     if (/^(이전\s*홀|앞\s*홀)$/.test(t)) return { ...out, nav: "prev" };
@@ -169,28 +185,64 @@ const Voice = (() => {
   }
 
   /* 음성 인식 한 번(누르고 말하기). onText(글, 끝났나) */
-  function listen(onText, onEnd) {
+  /* 음성 인식: 누르면 시작, 다시 누를 때까지 계속 듣는다.
+   * 휴대폰 Chrome은 말이 잠깐 멈추면 인식을 끝내므로, 끝날 때마다 다시 켜서 이어 붙인다(continuous 모드는 안드로이드에서 같은 말이 겹쳐 나와 쓰지 않음).
+   * 후보(maxAlternatives) 중 골프 낱말을 가장 많이 알아듣는 것을 고른다. 2분 지나거나 30초 동안 말이 없으면 스스로 끝낸다.
+   * onText(지금까지 글, 끝났나), onEnd(오류 문구|null). 돌려주는 값.stop()으로 끝낸다 */
+  function listen(onText, onEnd, ctx) {
     if (!SR) return null;
-    const r = new SR();
-    r.lang = "ko-KR";
-    r.interimResults = true;
-    r.continuous = false;
-    r.maxAlternatives = 1;
-    let final = "";
-    r.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
-      }
-      onText((final + interim).trim(), false);
+    let stopped = false, r = null, finals = [], lastHeard = Date.now(), ended = false;
+    const started = Date.now();
+    const text = (interim = "") => (finals.join(" ") + (interim ? " " + interim : "")).replace(/\s+/g, " ").trim();
+    const finish = (err) => { if (ended) return; ended = true; stopped = true; try { r && r.abort(); } catch { /* 무시 */ } onText(text(), true); onEnd(err || null); };
+    const start = () => {
+      r = new SR();
+      r.lang = "ko-KR";
+      r.interimResults = true;
+      r.continuous = false;
+      r.maxAlternatives = 5;
+      r.onresult = (e) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const res = e.results[i];
+          if (res.isFinal) { finals.push(best([...res].map((a) => a.transcript), ctx)); lastHeard = Date.now(); }
+          else interim += res[0].transcript;
+        }
+        if (interim) lastHeard = Date.now();
+        onText(text(interim), false);
+      };
+      r.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") finish("마이크 사용이 허용되지 않았습니다. 휴대폰 설정 → 앱(Chrome) → 권한에서 마이크를 허용해 주세요.");
+        else if (e.error === "network") finish("음성 인식 서버에 연결하지 못했습니다(인터넷 연결 확인). 지금까지 들은 말은 남겨 둡니다.");
+        // no-speech·aborted 등은 onend에서 다시 켠다
+      };
+      r.onend = () => {
+        if (stopped) return finish();
+        if (Date.now() - started > 120000) return finish();
+        if (Date.now() - lastHeard > 30000) return finish(finals.length ? null : "말소리를 듣지 못했습니다. 휴대폰을 입 가까이 대고 다시 말해 주세요.");
+        setTimeout(() => { if (!stopped) try { start(); } catch { finish(); } }, 150);
+      };
+      r.start();
     };
-    r.onerror = (e) => onEnd(e.error === "not-allowed" || e.error === "service-not-allowed" ? "마이크 사용이 허용되지 않았습니다. 브라우저 설정에서 마이크를 허용해 주세요." : e.error === "no-speech" ? "말소리를 듣지 못했습니다. 다시 눌러 말해 주세요." : `음성 인식 오류: ${e.error}`);
-    r.onend = () => { onText(final.trim(), true); onEnd(null); };
-    r.start();
-    return r;
+    start();
+    return { stop() { stopped = true; try { r.stop(); } catch { finish(); } setTimeout(() => finish(), 1500); } };
   }
 
-  return { available: !!SR, parse, describe, listen, _normNumbers: normNumbers };
+  // 인식 후보 중 골프 낱말을 가장 많이 알아듣고 남는 말이 적은 것
+  function best(alts, ctx) {
+    if (alts.length < 2) return alts[0] || "";
+    const c = ctx || { cur: 1, par: () => 4 };
+    let top = alts[0], score = -1e9;
+    alts.forEach((a, i) => {
+      const r = parse(a, c);
+      const n = r.parts.reduce((x, p) => x + Object.keys(p.set).length, 0) + (r.nav ? 1 : 0);
+      const rest = r.parts.reduce((x, p) => x + (p.rest || "").length, 0);
+      const sc = n * 10 - rest - i;   // 앞 후보(인식 점수 높은 것)를 조금 더 믿는다
+      if (sc > score) { score = sc; top = a; }
+    });
+    return top;
+  }
+
+  return { available: !!SR, parse, describe, listen, best, _normNumbers: (t) => normNumbers(fixWords(t)) };
 })();
 if (typeof module !== "undefined") module.exports = Voice;

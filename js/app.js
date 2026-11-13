@@ -1194,12 +1194,15 @@
       if ($("vMic")) $("vMic").onclick = () => {
         if (vRec) { vRec.stop(); return; }
         $("vText").value = ""; vOut.innerHTML = "";
-        $("vMic").textContent = "■ 듣는 중… (누르면 끝)";
+        $("vMic").textContent = "■ 다 말했으면 누르기";
+        $("vMic").classList.add("danger");
+        vOut.innerHTML = `<div class="muted" style="margin-top:6px">듣는 중… 여러 홀을 이어서 말해도 됩니다(예: 「3번 홀 보기 투퍼트, 4번 홀 파 원퍼트」). 다 말했으면 위 버튼을 누르세요.</div>`;
         vRec = Voice.listen((t, done) => { $("vText").value = t; if (done && t) vParse(); }, (err) => {
+          if ($("vMic")) $("vMic").classList.remove("danger");
           vRec = null;
           if ($("vMic")) $("vMic").textContent = "🎤 말로 입력";
           if (err) toast(err, 5000);
-        });
+        }, { cur, par: (n) => H[n]?.par });
         if (!vRec) $("vMic").textContent = "🎤 말로 입력";
       };
     }
