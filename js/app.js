@@ -52,6 +52,10 @@
     },
     del(at) { ls.set(KEY_KEEP, (ls.get(KEY_KEEP) || []).filter((k) => k.at !== at)); },
   };
+  // 라운드 입력 화면의 자동 저장을 앱을 내리거나(휴대폰 홈 버튼·화면 끔) 다른 화면으로 갈 때 바로 실행
+  let autoFlush = null;
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && autoFlush) autoFlush(); });
+  window.addEventListener("hashchange", () => { if (autoFlush) autoFlush(); });
   function toast(msg, ms = 2800) {
     const t = document.getElementById("toast");
     t.textContent = msg;
@@ -773,8 +777,24 @@
     // 최신 서버 기록에 밀려난 임시 입력은 이 화면에서 입력하는 순간 덮어써지므로 먼저 보관함에 옮긴다
     if (draftStale) keep.put("다른 곳에서 저장된 뒤 남은 입력", draftRaw);
     const kept = edit ? keep.list(edit.id) : [];
+    // 서버 기준 홀 기록(저장 충돌 확인용). 자동 저장이 성공할 때마다 새 서버 기록으로 바뀐다
+    let baseHoles = edit ? holeSig(edit) : null;
+    /* 밀려난 임시 입력 중 서버에 스코어가 없는 홀(예: 저장 안 된 후반 9홀)은 자동으로 합쳐 연다.
+     * 서버에 이미 스코어가 있는 홀은 서버 기록을 그대로 둔다(오래된 임시본이 최신 기록을 덮지 않게 — 11-11 사고) */
+    let mergedN = 0;
+    if (draftStale) {
+      const sv = Object.fromEntries((edit.holes || []).map((h) => [h.h, h]));
+      const add = (draftRaw.holes || []).filter((h) => isNum(h?.score) && !isNum(sv[h.h]?.score));
+      if (add.length) {
+        for (const h of add) sv[h.h] = { ...(sv[h.h] || {}), ...h };
+        mergedN = add.length;
+        draftRaw.mergedHoles = add.map((h) => h.h);
+      }
+      if (mergedN) edit._merged = Object.values(sv).sort((a, b) => a.h - b.h);
+    }
     const base = edit ? structuredClone(edit) : { date: new Date().toISOString().slice(0, 10), course: "", front: "", back: "", tee: "White", region: "", memo: "", holes: [] };
     let r = draft || base;
+    if (mergedN) { r = { ...base, holes: edit._merged }; delete edit._merged; }
     // 라운드 사진: 저장된 것은 경로, 새로 고른 것은 줄인 사진(dataUrl·b64). 새 사진은 따로 임시 저장(용량이 커서 실패하면 넘어감)
     const photoKey = draftKey + ":photos";
     const photoSt = { photos: (edit?.photos || []).map((path) => ({ path })), removed: [] };
@@ -855,7 +875,8 @@
     app.innerHTML = `
       <h2>${edit ? "라운드 수정" : "라운드 입력"}</h2>
       ${G.canWrite() ? "" : SRV ? `<div class="notice">로그인해야 저장할 수 있습니다. 입력 내용은 이 기기에 임시 저장됩니다.</div>` : `<div class="notice">지금은 <b>읽기 전용</b>입니다. 저장하려면 <a href="#/settings">설정</a>에서 GitHub 토큰을 넣어 주세요. 입력 내용은 이 기기에 임시 저장됩니다.</div>`}
-      ${draft ? `<div class="notice" style="margin-top:8px">이전에 입력하던 내용을 불러왔습니다. <button class="link" id="bDiscard" type="button">버리고 새로 시작</button></div>` : draftStale ? `<div class="notice" style="margin-top:8px">이 기기에 예전에 입력하다 만 내용이 있지만, 그 뒤 다른 곳에서 이 라운드가 저장되어 <b>최신 저장 기록</b>을 열었습니다. <button class="link" id="bUseDraft" type="button">예전 입력 불러오기</button> · <button class="link" id="bDiscard" type="button">예전 입력 버리기</button></div>` : ""}
+      ${draft ? `<div class="notice" style="margin-top:8px">이전에 입력하던 내용을 불러왔습니다. <button class="link" id="bDiscard" type="button">버리고 새로 시작</button></div>` : draftStale && !mergedN ? `<div class="notice" style="margin-top:8px">이 기기에 예전에 입력하다 만 내용이 있지만, 그 뒤 다른 곳에서 이 라운드가 저장되어 <b>최신 저장 기록</b>을 열었습니다. <button class="link" id="bUseDraft" type="button">예전 입력 불러오기</button> · <button class="link" id="bDiscard" type="button">예전 입력 버리기</button></div>` : ""}
+      ${mergedN ? `<div class="notice" style="margin-top:8px">이 기기에서 입력했지만 서버에 저장되지 않았던 <b>${mergedN}개 홀(${draftRaw.mergedHoles.join("·")}번)</b>을 서버 기록에 합쳐 열었습니다. 확인한 뒤 저장하세요(자동 저장도 됩니다).</div>` : ""}
       ${kept.length ? `<div class="notice" style="margin-top:8px"><b>이 기기에 보관된 입력 ${kept.length}개</b>(저장되지 못한 입력) — 불러와 확인한 뒤 저장하세요.<br>${kept.map((k, i) => `<button class="link" data-keep="${i}" type="button">${esc(new Date(k.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }))} · 스코어 ${keepScored(k.data)}홀</button> <button class="link" data-keepdel="${i}" type="button" title="보관된 입력 지우기">✕</button>`).join(" · ")}</div>` : ""}
       <div class="card" style="margin-top:12px">
         <div class="form">
@@ -898,6 +919,7 @@
       </div>
       <div class="savebar">
         <span class="sb-info" id="sbInfo"></span>
+        <span class="sb-info muted" id="autoInfo"></span>
         <a class="btn ghost" href="${edit ? "#/round/" + encodeURIComponent(edit.id) : "#/rounds"}">취소</a>
         <button class="btn" id="bSave" type="button" ${G.canWrite() ? "" : "disabled"}>저장</button>
       </div>
@@ -914,7 +936,58 @@
     };
     const meta = () => ({ date: $("fDate").value, time: $("fTime").value, course: $("fCourse").value.trim(), front: $("fFront").value.trim(), back: $("fBack").value.trim(), tee: $("fTee").value.trim(), region: $("fRegion").value, memo: $("fMemo").value.trim(), ...kindMeta() });
     const holesArr = () => Object.values(H).map((h) => Object.fromEntries(Object.entries(h).filter(([, v]) => v !== "" && v !== null && v !== undefined))).filter((h) => Object.keys(h).length > 1);
-    const saveDraft = () => ls.set(draftKey, { ...meta(), id: edit?.id, baseSig: edit ? holeSig(edit) : undefined, holes: holesArr(), companions: compSt.comps.filter((c) => c.name.trim()).map(cleanComp) });
+    const saveDraft = () => { ls.set(draftKey, { ...meta(), id: edit?.id, baseSig: baseHoles ?? undefined, holes: holesArr(), companions: compSt.comps.filter((c) => c.name.trim()).map(cleanComp) }); scheduleAuto(); };
+
+    /* 자동 저장(서버판, 이미 서버에 있는 라운드 — 예정 라운드에서 「스코어 입력」 포함): 입력이 멈추고 15초 뒤,
+     * 앱을 내리거나 다른 화면으로 갈 때 이 기기 임시 저장본을 서버에 올린다. 「저장」을 매번 누르지 않아도 입력이 서버에 쌓인다.
+     * 사진·동영상은 무거워서 「저장」 때만 올린다. 다른 기기에서 바뀌었으면 자동 저장을 멈추고 「저장」 때 묻는다 */
+    const autoSt = { timer: 0, busy: false, stop: false };
+    const autoMsg = (t, bad) => { const el = document.getElementById("autoInfo"); if (el && document.getElementById("bSave")) { el.textContent = t; el.style.color = bad ? "#d9475a" : ""; } };
+    function scheduleAuto(ms = 15000) {
+      if (!edit || G.KIND !== "server" || !G.canWrite() || autoSt.stop) return;
+      clearTimeout(autoSt.timer);
+      autoSt.timer = setTimeout(autoSave, ms);
+    }
+    async function autoSave() {
+      autoSt.timer = 0;
+      if (autoSt.busy) return scheduleAuto(3000);
+      const d = ls.get(draftKey);
+      if (!d?.holes || !d.holes.some((h) => isNum(h.score))) return;   // 스코어가 없으면(라운드 전) 자동 저장하지 않는다
+      const { id: _i, baseSig: _b, companions, mergedHoles: _m, ...m } = d;
+      const obj = { ...edit, ...m, holes: d.holes };
+      delete obj.planned;
+      if (companions?.length) obj.companions = companions;
+      if (JSON.stringify(holeSig(obj)) === JSON.stringify(baseHoles) && JSON.stringify(companions || []) === JSON.stringify(edit.companions || [])) {
+        const sv = rounds.find((x) => x.id === edit.id);
+        if (sv && ["date", "course", "front", "back", "tee", "memo", "time"].every((k) => (sv[k] ?? "") === (obj[k] ?? ""))) return;   // 바뀐 것 없음
+      }
+      autoSt.busy = true;
+      autoMsg("자동 저장 중…");
+      try {
+        await commit((data) => {
+          const i = data.findIndex((x) => x.id === edit.id);
+          if (i < 0 || holeSig(data[i]) !== baseHoles) throw Object.assign(new Error("conflict"), { conflict: true });
+          data[i] = { ...obj, photos: data[i].photos };   // 사진은 서버 것 그대로(새 사진은 「저장」 때)
+          return data;
+        }, `라운드 자동 저장: ${obj.date} ${obj.course}`);
+        baseHoles = holeSig(obj);
+        const cur = ls.get(draftKey);
+        if (cur) ls.set(draftKey, { ...cur, baseSig: baseHoles });
+        autoMsg(`자동 저장됨 ${new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`);
+      } catch (e) {
+        if (e.conflict) {
+          autoSt.stop = true;
+          keep.put("자동 저장 중 다른 곳 변경으로 멈춘 입력", { ...d, baseSig: undefined });
+          autoMsg("다른 곳에서 바뀌어 자동 저장을 멈춤 — 「저장」을 누르면 어느 쪽으로 저장할지 묻습니다", true);
+        } else {
+          autoMsg("자동 저장 실패(통신) — 입력은 이 기기에 있음, 1분 뒤 다시 시도", true);
+          scheduleAuto(60000);
+        }
+      } finally { autoSt.busy = false; }
+    }
+    autoFlush = () => { if (autoSt.timer) { clearTimeout(autoSt.timer); autoSave(); } };
+    // 합쳐 연 홀은 바로 임시 저장 + 자동 저장(모임 목록이 채워진 뒤에 — 유형이 잘못 저장되지 않게)
+    if (mergedN) setTimeout(() => { if (document.getElementById("bSave")) saveDraft(); }, 3000);
 
     function field([k, lab, type, opts]) {
       const v = H[cur][k];
@@ -1177,7 +1250,7 @@
         const save = (force) => commit((data) => {
           const i = data.findIndex((x) => x.id === obj.id);
           // 이 화면을 연 뒤 다른 기기·탭에서 홀 기록이 바뀌었으면 바로 덮어쓰지 않고 사용자에게 묻는다(아래 catch)
-          if (!force && i >= 0 && edit && holeSig(data[i]) !== holeSig(edit)) throw Object.assign(new Error("conflict"), { conflict: keepScored(data[i]) });
+          if (!force && i >= 0 && edit && holeSig(data[i]) !== baseHoles) throw Object.assign(new Error("conflict"), { conflict: keepScored(data[i]) });
           if (i >= 0) data[i] = obj; else data.push(obj);
           return data.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         }, `${planned ? "예정 라운드" : edit ? "라운드 수정" : "라운드 추가"}: ${m.date} ${m.course}`);
@@ -1191,6 +1264,7 @@
         }
         for (const p of photoSt.removed) await G.deleteFile(p, `사진 삭제: ${what}`).catch(() => null);
         if (ph.errs.length) toast("일부 사진을 저장하지 못했습니다: " + ph.errs.join(" / "), 6000);
+        clearTimeout(autoSt.timer); autoSt.timer = 0; autoSt.stop = true;   // 저장 끝 — 남은 자동 저장 없음
         ls.del(draftKey);
         ls.del(photoKey);
         toast(planned ? "예정 라운드로 저장했습니다. 라운드가 끝나면 「스코어 입력」으로 이어서 넣으세요." : "저장했습니다.", 4000);
