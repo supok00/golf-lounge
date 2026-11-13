@@ -897,6 +897,14 @@
         <p class="legend-note">「골프장 정보」는 골프장 홈페이지에서 옮겨 둔 코스 자료입니다${courseDB.length ? ` — 지금 등록: ${esc(courseChoices().join(", "))}` : ""}. 골프장·전반/후반 코스·티를 먼저 적고 누르세요. 없는 골프장은 「새 골프장 정보 요청」에 홈페이지 주소를 남기면 관리자가 확인해 등록합니다. 라운드 전에 스코어 없이 저장하면 <b>예정 라운드</b>로 등록되어 홈과 라운드 목록에서 홀별 공략을 볼 수 있습니다.</p>
       </div>
 
+      <div class="card voicebar" id="voiceBar" style="margin-top:12px;padding:10px 12px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${typeof Voice !== "undefined" && Voice.available ? `<button class="btn" id="vMic" type="button" style="min-width:120px">🎤 말로 입력</button>` : ""}
+          <input id="vText" style="flex:1;min-width:180px" placeholder="예: 3번 홀 보기 투퍼트 페어웨이 안착 (키보드 🎤로 말해도 됨)" enterkeyhint="done">
+          <button class="btn ghost" id="vGo" type="button">해석</button>
+        </div>
+        <div id="vOut"></div>
+      </div>
       <div class="holenav" id="holeNav"></div>
       <div class="card holecard" id="holeCard"></div>
       <div class="row" style="margin-top:10px;justify-content:space-between">
@@ -1138,6 +1146,63 @@
     });
     $("bPrev").onclick = () => { cur = cur === 1 ? 18 : cur - 1; drawAll(); };
     $("bNext").onclick = () => { cur = cur === 18 ? 1 : cur + 1; drawAll(); };
+    /* 말로 입력(js/voice.js): 받아쓴 글 → 미리보기 → 「적용」. 홀 번호를 말하지 않으면 지금 홀 */
+    if (typeof Voice !== "undefined") {
+      let vRec = null, vRes = null;
+      const vOut = $("vOut");
+      const vParse = () => {
+        const t = $("vText").value.trim();
+        if (!t) { vOut.innerHTML = ""; return; }
+        const r = Voice.parse(t, { cur, par: (n) => H[n]?.par });
+        if (r.nav && !r.parts.length) {
+          cur = r.nav === "next" ? Math.min(18, cur + 1) : r.nav === "prev" ? Math.max(1, cur - 1) : r.nav;
+          $("vText").value = ""; vOut.innerHTML = ""; drawAll(true);
+          return toast(`${cur}번 홀`);
+        }
+        vRes = r.parts.filter((p) => Object.keys(p.set).some((k) => k !== "_strokes"));
+        const lines = r.parts.map((p) => `<div style="margin-top:6px"><b>${p.hole}번 홀</b> ${esc(Voice.describe(p.set)) || `<span class="muted">알아들은 항목 없음</span>`}${p.bad ? ` <span class="ng">${esc(p.bad)}</span>` : ""}${p.rest ? `<div class="muted" style="font-size:12px">못 알아들은 말: ${esc(p.rest)}</div>` : ""}</div>`).join("");
+        vOut.innerHTML = `<div class="notice" style="margin-top:8px">${lines || "알아들은 내용이 없습니다. 예: 「3번 홀 보기 투퍼트」"}
+          ${vRes.length ? `<div style="margin-top:8px;display:flex;gap:8px"><button class="btn" id="vApply" type="button">적용</button><button class="btn ghost" id="vCancel" type="button">취소</button></div>` : ""}</div>`;
+        if ($("vApply")) $("vApply").onclick = vApply;
+        if ($("vCancel")) $("vCancel").onclick = () => { vOut.innerHTML = ""; };
+      };
+      const vApply = () => {
+        let last = cur;
+        for (const p of vRes || []) {
+          const h = H[p.hole];
+          const set = { ...p.set };
+          delete set._strokes;
+          if (isNum(set.par)) h.par = set.par, AUTO[p.hole].delete("par");
+          for (const [k, v] of Object.entries(set)) {
+            if (k === "par") continue;
+            if (TEE_ONLY.has(k) && h.par === 3) continue;   // 파3은 티샷 FW·미스 해당 없음
+            h[k] = k === "memo" && h.memo && !h.memo.includes(v) ? `${h.memo} / ${v}` : v;
+            AUTO[p.hole].delete(k);
+          }
+          if (h.par === 3) for (const t of TEE_ONLY) { if (AUTO[p.hole].has(t) || set[t] === undefined) { delete h[t]; AUTO[p.hole].delete(t); } }
+          autoFill(p.hole);
+          last = p.hole;
+        }
+        saveDraft();
+        const msg = (vRes || []).map((p) => `${p.hole}번`).join("·");
+        cur = last; $("vText").value = ""; vOut.innerHTML = ""; vRes = null;
+        drawAll(true);
+        toast(`${msg} 홀에 넣었습니다.`);
+      };
+      $("vGo").onclick = vParse;
+      $("vText").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); vParse(); } });
+      if ($("vMic")) $("vMic").onclick = () => {
+        if (vRec) { vRec.stop(); return; }
+        $("vText").value = ""; vOut.innerHTML = "";
+        $("vMic").textContent = "■ 듣는 중… (누르면 끝)";
+        vRec = Voice.listen((t, done) => { $("vText").value = t; if (done && t) vParse(); }, (err) => {
+          vRec = null;
+          if ($("vMic")) $("vMic").textContent = "🎤 말로 입력";
+          if (err) toast(err, 5000);
+        });
+        if (!vRec) $("vMic").textContent = "🎤 말로 입력";
+      };
+    }
     if ($("bUseDraft")) $("bUseDraft").onclick = () => { if (confirm("예전에 입력하다 만 내용을 불러올까요? 저장하면 지금 저장된 홀 기록을 덮어씁니다.")) inputView(id, { useDraft: true }); };
     if ($("bDiscard")) $("bDiscard").onclick = () => { keep.put("버린 입력", draftRaw); ls.del(draftKey); ls.del(photoKey); inputView(id); };
     app.querySelectorAll("[data-keep]").forEach((b) => (b.onclick = () => {
