@@ -1191,19 +1191,27 @@
       };
       $("vGo").onclick = vParse;
       $("vText").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); vParse(); } });
-      if ($("vMic")) $("vMic").onclick = () => {
+      if ($("vMic")) $("vMic").onclick = async () => {
         if (vRec) { vRec.stop(); return; }
         $("vText").value = ""; vOut.innerHTML = "";
+        const btnDone = () => { vRec = null; if ($("vMic")) { $("vMic").classList.remove("danger"); $("vMic").textContent = "🎤 말로 입력"; $("vMic").disabled = false; } };
+        const hint = (t) => { if ($("vOut") && !$("vApply")) vOut.innerHTML = `<div class="muted" style="margin-top:6px">${esc(t)}</div>`; };
         $("vMic").textContent = "■ 다 말했으면 누르기";
         $("vMic").classList.add("danger");
-        vOut.innerHTML = `<div class="muted" style="margin-top:6px">듣는 중… 여러 홀을 이어서 말해도 됩니다(예: 「3번 홀 보기 투퍼트, 4번 홀 파 원퍼트」). 다 말했으면 위 버튼을 누르세요.</div>`;
-        vRec = Voice.listen((t, done) => { $("vText").value = t; if (done && t) vParse(); }, (err) => {
-          if ($("vMic")) $("vMic").classList.remove("danger");
-          vRec = null;
-          if ($("vMic")) $("vMic").textContent = "🎤 말로 입력";
-          if (err) toast(err, 5000);
-        }, { cur, par: (n) => H[n]?.par });
-        if (!vRec) $("vMic").textContent = "🎤 말로 입력";
+        // 서버 음성 인식(골프 낱말을 더 잘 알아들음)이 켜져 있으면 녹음해서 보내고, 아니면 Chrome 내장 인식
+        if (await Voice.serverReady()) {
+          hint("녹음 중… 여러 홀을 이어서 말해도 됩니다(예: 「3번 홀 보기 투퍼트, 4번 홀 파 원퍼트」). 다 말했으면 위 버튼을 누르세요.");
+          vRec = Voice.record((st) => { hint(st); if (st.startsWith("알아듣는")) { $("vMic").textContent = "알아듣는 중…"; $("vMic").disabled = true; } }, (text, err) => {
+            btnDone();
+            if (text) { $("vText").value = text; vParse(); }
+            else if (err) { hint(""); toast(err, 5000); }
+          });
+          return;
+        }
+        if (!Voice.listen) { btnDone(); return toast("이 브라우저는 음성 인식을 지원하지 않습니다. 키보드의 🎤로 글 칸에 말해 주세요.", 5000); }
+        hint("듣는 중… 여러 홀을 이어서 말해도 됩니다(예: 「3번 홀 보기 투퍼트, 4번 홀 파 원퍼트」). 다 말했으면 위 버튼을 누르세요.");
+        vRec = Voice.listen((t, done) => { $("vText").value = t; if (done && t) vParse(); }, (err) => { btnDone(); if (err) toast(err, 5000); }, { cur, par: (n) => H[n]?.par });
+        if (!vRec) { btnDone(); toast("이 브라우저는 음성 인식을 지원하지 않습니다. 키보드의 🎤로 글 칸에 말해 주세요.", 5000); }
       };
     }
     if ($("bUseDraft")) $("bUseDraft").onclick = () => { if (confirm("예전에 입력하다 만 내용을 불러올까요? 저장하면 지금 저장된 홀 기록을 덮어씁니다.")) inputView(id, { useDraft: true }); };

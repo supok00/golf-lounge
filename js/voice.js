@@ -228,6 +228,45 @@ const Voice = (() => {
     return { stop() { stopped = true; try { r.stop(); } catch { finish(); } setTimeout(() => finish(), 1500); } };
   }
 
+  /* 서버 음성 인식(api/src/voice.js — 골프 낱말 목록을 함께 주는 OpenAI 음성 인식): 녹음 → 서버 → 글.
+   * 서버판이고 관리자가 키를 넣었을 때만 쓴다. 아니면 위 Chrome 내장 인식(listen)으로 대신 */
+  let srvReady = null;
+  const serverReady = () => (srvReady ??= fetch("/api/voice/stt", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : {})).then((j) => !!j.enabled).catch(() => false));
+  const toB64 = (blob) => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1] || ""); fr.onerror = () => no(fr.error); fr.readAsDataURL(blob); });
+  /* 누르면 녹음, stop()하면 서버로 보내 글을 받는다(최대 2분). onState(안내 문구), onDone(글|null, 오류|null) */
+  function record(onState, onDone) {
+    let mr = null, stream = null, stopped = false, timer = 0;
+    const ctl = { stop() { stopped = true; clearTimeout(timer); if (mr && mr.state !== "inactive") mr.stop(); else if (!mr) onDone(null, null); } };
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      } catch {
+        return onDone(null, "마이크 사용이 허용되지 않았습니다. 휴대폰 설정 → 앱(Chrome) → 권한에서 마이크를 허용해 주세요.");
+      }
+      if (stopped) { stream.getTracks().forEach((t) => t.stop()); return; }
+      const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || "";
+      mr = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
+      const chunks = [];
+      mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: (mr.mimeType || type || "audio/webm").split(";")[0] });
+        if (blob.size < 2000) return onDone(null, "녹음된 소리가 없습니다. 휴대폰을 입 가까이 대고 다시 말해 주세요.");
+        onState("알아듣는 중…");
+        try {
+          const r = await fetch("/api/voice/stt", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ audio: await toB64(blob), type: blob.type }) });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) { if (r.status === 503) srvReady = Promise.resolve(false); return onDone(null, j.error || `음성 인식에 실패했습니다(${r.status}).`); }
+          onDone(j.text || "", j.text ? null : "알아들은 말이 없습니다. 다시 말해 주세요.");
+        } catch { onDone(null, "음성 인식 서버에 연결하지 못했습니다(인터넷 연결 확인)."); }
+      };
+      mr.start(1000);
+      onState("녹음 중… 다 말했으면 위 버튼을 누르세요(최대 2분).");
+      timer = setTimeout(() => ctl.stop(), 120000);
+    })();
+    return ctl;
+  }
+
   // 인식 후보 중 골프 낱말을 가장 많이 알아듣고 남는 말이 적은 것
   function best(alts, ctx) {
     if (alts.length < 2) return alts[0] || "";
@@ -243,6 +282,6 @@ const Voice = (() => {
     return top;
   }
 
-  return { available: !!SR, parse, describe, listen, best, _normNumbers: (t) => normNumbers(fixWords(t)) };
+  return { available: !!SR || !!(typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia), serverReady, record, parse, describe, listen, best, _normNumbers: (t) => normNumbers(fixWords(t)) };
 })();
 if (typeof module !== "undefined") module.exports = Voice;
