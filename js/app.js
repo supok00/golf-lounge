@@ -749,7 +749,8 @@
     const draftKey = KEY_DRAFT + (edit ? ":" + edit.id : ":new");
     /* 임시 저장본(이 기기)은 만들 때의 서버 홀 기록(baseSig)이 지금과 같을 때만 자동으로 불러온다.
      * 그 뒤 다른 기기·탭에서 저장해 서버가 바뀌었으면 서버 기록을 열고, 임시 저장본은 「예전 입력 불러오기」로만 — 오래된 임시본이 최신 기록을 덮어쓰지 않게(2026-11-11 비에이비스타 사고) */
-    const holeSig = (x) => JSON.stringify(x?.holes || []);
+    // 서버(PostgreSQL jsonb)는 저장할 때 키 순서를 바꿔 돌려주므로 키를 정렬해 비교한다 — 안 그러면 한 번 저장한 뒤 같은 화면 흐름의 다음 저장이 늘 「다른 기기에서 바뀜」으로 막힌다(2026-11-13 플라밍고 사고)
+    const holeSig = (x) => JSON.stringify((x?.holes || []).map((h) => Object.keys(h || {}).sort().map((k) => [k, h[k]])));
     const draftRaw = ls.get(draftKey);
     const draftStale = !!(edit && draftRaw && draftRaw.holes && !opt.useDraft && draftRaw.baseSig !== holeSig(edit));
     const draft = draftRaw && draftRaw.holes && !draftStale ? draftRaw : null;
