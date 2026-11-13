@@ -2177,9 +2177,9 @@
     $("bParse").onclick = () => {
       parsed = SmartScore.parse($("ssText").value).map((r) => {
         const course = SmartScore.matchCourse(r.course, known);
-        const dup = rounds.some((x) => !x.planned && x.date === r.date && x.course === course);
+        const di = dupOf({ date: r.date, course, holes: r.holes });
         const st = { comps: applyAlias(Companions.parse(r.block, parsOf(r), { skipScore: true })), photos: [], removed: [], text: "" };
-        return { ...r, course, origCourse: r.course, dup, pick: !dup && r.holes.length > 0, st };
+        return { ...r, course, origCourse: r.course, dup: !!di, fill: di?.fill || 0, pick: (!di || di.fill > 0) && r.holes.length > 0, st };
       });
       compIdx = -1;
       // 스마트스코어 「Score」 줄이 없으면 스코어카드 표(홀·PAR 줄 + 선수 이름 줄)로 다시 읽어 확인 카드를 띄운다
@@ -2279,9 +2279,9 @@
         if (me.orig && me.orig !== "나") ls.set(KEY_ME, me.orig);
         const holes = me.holes.map(({ h, st }) => ({ h, par: card.pars[h], score: st - card.pars[h] }));
         const comps = card.players.filter((_, i) => i !== card.me);
-        const dup = rounds.some((x) => !x.planned && x.date === card.date && x.course === card.course);
+        const di = dupOf({ date: card.date, course: card.course, holes }), dup = !!di;
         parsed.push({ date: card.date, time: card.time || "", course: card.course, origCourse: card.course, front: "", back: "", tee: card.tee, distCount: 0, statedTotal: null,
-          total: S.sum(holes.map((h) => h.par + h.score)), holes, warnings: holes.length === 18 ? [] : [`${holes.length}홀만 읽었습니다`], block: "", dup, pick: !dup,
+          total: S.sum(holes.map((h) => h.par + h.score)), holes, warnings: holes.length === 18 ? [] : [`${holes.length}홀만 읽었습니다`], block: "", dup, fill: di?.fill || 0, pick: !di || di.fill > 0,
           st: { comps, photos: card.photos, removed: [], text: "" } });
         compIdx = parsed.length - 1;
         card = null;
@@ -2306,7 +2306,7 @@
           <td>${r.distCount ? `${r.distCount}홀` : `<span class="muted">-</span>`}</td>
           <td><b>${r.total ?? "-"}</b>${r.statedTotal !== null && r.statedTotal !== r.total ? `<br><span class="ng">표기 ${r.statedTotal}</span>` : ""}</td>
           <td><span data-ccount="${i}">${compLabel(r)}</span><br><button class="link" data-cedit="${i}" type="button">${compIdx === i ? "편집 중" : "추가·편집"}</button></td>
-          <td class="l">${r.dup ? `<span class="pill ng">이미 있음</span> ` : ""}${r.warnings.length ? `<span class="ng">${esc(r.warnings.join(" / "))}</span>` : `<span class="ok">정상</span>`}</td></tr>`).join("")}</tbody></table></div>
+          <td class="l">${r.dup ? `<span class="pill ng">이미 있음</span> ${r.fill ? `<span class="ok">등록하면 기존 라운드의 빈 ${r.fill}홀만 채움(이미 있는 홀은 그대로)</span> ` : `<span class="muted">채울 빈 홀 없음</span> `}` : ""}${r.warnings.length ? `<span class="ng">${esc(r.warnings.join(" / "))}</span>` : `<span class="ok">정상</span>`}</td></tr>`).join("")}</tbody></table></div>
         <datalist id="teeOpts">${["White", "Blue", "Red", "Black", "Gold"].map((t) => `<option value="${t}">`).join("")}</datalist>
         ${parsed.some((r) => r.distCount && !r.tee) ? `<p class="legend-note ng">거리가 있는 라운드는 <b>티</b>를 적어 주세요. 다음에 같은 티로 칠 때 거리를 자동으로 불러올 수 있습니다.</p>` : ""}
         <datalist id="knownCourses">${known.sort().map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
@@ -2322,7 +2322,8 @@
       app.querySelectorAll("[data-course]").forEach((c) => (c.onchange = () => {
         const r = parsed[c.dataset.course];
         r.course = c.value.trim();
-        r.dup = rounds.some((x) => !x.planned && x.date === r.date && x.course === r.course);
+        const di = dupOf(r);
+        r.dup = !!di; r.fill = di?.fill || 0;
         drawParsed();
       }));
       const bi = $("bImport");
@@ -2342,7 +2343,28 @@
             if (comps.length) objs[i].companions = comps;
             if (paths.length) objs[i].photos = paths;
           }
-          await commit((data) => absorbPlanned(data, objs).concat(objs).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)), `스마트스코어 등록 ${objs.length}건: ${objs.map((o) => o.date + " " + o.course).join(", ")}`.slice(0, 250));
+          await commit((data) => {
+            // 같은 날·같은 골프장 라운드가 이미 있으면 새로 만들지 않고, 스코어가 빈 홀만 채운다(동반자·사진은 덧붙임)
+            const add = [];
+            objs.forEach((o, i) => {
+              const t = picks[i].dup && data.find((x) => !x.planned && x.date === o.date && normName(x.course) === normName(o.course));
+              if (!t) return add.push(o);
+              t.holes ||= [];
+              const hm = Object.fromEntries(t.holes.map((h) => [h.h, h]));
+              for (const h of o.holes || []) {
+                const e = hm[h.h];
+                if (!e) { t.holes.push({ ...h }); continue; }
+                if (isNum(e.score)) continue;
+                // 스코어·Par는 스코어카드 값으로(스코어는 Par 기준 +/-라 둘이 같이 가야 함 — 예정 라운드의 Par가 틀린 경우가 있음)
+                for (const [k, v] of Object.entries(h)) if (e[k] === undefined || e[k] === null || k === "score" || k === "par") e[k] = v;
+              }
+              t.holes.sort((a, b) => a.h - b.h);
+              delete t.planned;
+              if (o.companions?.length) { const has = new Set((t.companions || []).map((c) => c.name)); t.companions = [...(t.companions || []), ...o.companions.filter((c) => !has.has(c.name))]; }
+              if (o.photos?.length) t.photos = [...(t.photos || []), ...o.photos];
+            });
+            return absorbPlanned(data, add).concat(add).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+          }, `스마트스코어 등록 ${objs.length}건: ${objs.map((o) => o.date + " " + o.course).join(", ")}`.slice(0, 250));
           toast(`${objs.length}개 라운드를 등록했습니다.`);
           parsed = [];
           location.hash = "#/rounds";
@@ -2353,6 +2375,14 @@
         }
       };
     }
+  }
+
+  // 같은 날·같은 골프장(표기 달라도)의 등록된 라운드와, 거기서 스코어가 비어 있는데 새로 읽은 값이 있는 홀 수
+  function dupOf(r) {
+    const t = rounds.find((x) => !x.planned && x.date === r.date && normName(x.course) === normName(r.course));
+    if (!t) return null;
+    const has = new Set((t.holes || []).filter((h) => isNum(h.score)).map((h) => h.h));
+    return { id: t.id, fill: (r.holes || []).filter((h) => isNum(h.score) && !has.has(h.h)).length };
   }
 
   // 새로 등록하는 라운드와 날짜·골프장이 같은 예정 라운드는 지우고, 예정 라운드에 넣어 둔 거리·핸디캡·코스·티를 빈 칸에 이어받는다

@@ -122,10 +122,88 @@ const Companions = (() => {
     return { text: out.join("\n"), pars };
   }
 
+  /* 스마트스코어 등 「HOLE 줄 → PAR 줄 → 선수 줄들」이 전반·후반 두 덩어리로 나오는 스코어카드(사진 글자 인식 결과).
+   * - HOLE 줄마다 한 덩어리: 첫 덩어리는 1~9번, 둘째는 10~18번(카드가 후반도 1~9로 적어도 자리로 판단)
+   * - HOLE 다음 첫 숫자 줄(9칸이 모두 3~6)은 Par — 라벨을 「PR」「P4R」처럼 잘못 읽어도 된다
+   * - 선수 줄은 덩어리마다 같은 순서 → 전반 n번째 줄 + 후반 n번째 줄 = 한 사람(이름이 깨져도 합쳐짐)
+   * - 이름을 숫자로 잘못 읽은 줄(「위수복」→「222」)은 맨 앞 숫자를 빼고 9칸 + 합계가 맞는 쪽을 고른다
+   * - 값이 +/-인지 타수인지는 끝의 합계 칸(T)으로: 합계 = Par합 + 값합 → +/-, 합계 = 값합 → 타수
+   * 그런 모양이 아니면 null(아래 parse가 원래 방식으로 읽는다) */
+  function holeBlocks(text) {
+    if (String(text || "").includes("|")) return null;   // | 로 칸을 나눈 표는 normalizeTable이 맡는다
+    const lines = String(text || "").replace(/\r/g, "").split("\n").map((l) => l.trim());
+    const isHole = (l) => /^(hole|h0le|ho1e|hoie|홀)\b/i.test(l) && (l.match(/\d/g) || []).length >= 5;
+    const starts = lines.map((l, i) => (isHole(l) ? i : -1)).filter((i) => i >= 0);
+    if (!starts.length || starts.length > 2) return null;
+    // 한 줄에 18홀이 다 있는 카드는 원래 방식으로
+    if (starts.some((i) => (lines[i].match(/\d+/g) || []).length >= 15)) return null;
+    const blocks = [];
+    for (const [b, st] of starts.entries()) {
+      // 홀 번호: HOLE 줄에 10~18이 적혀 있으면 후반, 아니면 덩어리 순서(스마트스코어는 후반도 1~9로 적음)
+      const hn = (lines[st].match(/\d+/g) || []).map(Number);
+      const off = hn.filter((x) => x >= 10 && x <= 18).length >= 5 ? 9 : hn.filter((x) => x >= 1 && x <= 9).length >= 5 && starts.length === 1 ? 0 : b * 9;
+      const end = starts[b + 1] ?? lines.length;
+      let par = null;
+      const rows = [];
+      for (let i = st + 1; i < end; i++) {
+        const l = lines[i];
+        const d0 = l.search(/[+-]?\d/);
+        if (d0 < 0) { if (par && rows.length) break; continue; }
+        const label = l.slice(0, d0).replace(/[^가-힣A-Za-z*]/g, "");
+        const toks = l.slice(d0).match(/[+-]?\d+/g) || [];
+        if (!par) {
+          const v = stripTotals(splitMerged(toks));
+          if (v.length >= 9 && v.slice(0, 9).every((x) => x >= 3 && x <= 6)) { par = v.slice(0, 9); continue; }
+          continue;
+        }
+        const parSum = par.reduce((a, c) => a + c, 0);
+        // 맨 앞 숫자가 깨진 이름일 수 있어, 그대로/하나 뺀 것 중 「9칸 + 합계가 맞는」 쪽
+        const tries = [toks, toks.slice(1)].map((t, k) => {
+          const raw = t.length >= 5 ? splitMerged(t) : t.map(Number);
+          const holes = stripTotals(raw).slice(0, 9);
+          const tot = raw.length > holes.length ? raw.at(-1) : null;
+          const hs = holes.reduce((a, c) => a + c, 0);
+          const mode = tot === null ? null : tot === parSum + hs ? "rel" : tot === hs ? "abs" : null;
+          return { k, holes, mode, ok: holes.length === 9 && holes.every((x) => x >= -3 && x <= 15) };
+        }).filter((x) => x.ok);
+        if (!tries.length) { if (rows.length) break; continue; }
+        const best = tries.find((x) => x.mode) || tries[0];
+        rows.push({ name: best.k === 1 && !label ? "" : label, holes: best.holes, mode: best.mode });
+      }
+      if (!par || !rows.length) return null;
+      blocks.push({ par, rows, off });
+    }
+    const pars = {};
+    blocks.forEach((bk) => bk.par.forEach((v, i) => (pars[bk.off + i + 1] = v)));
+    const n = Math.max(...blocks.map((bk) => bk.rows.length));
+    const hangul = (x) => (x.match(/[가-힣]/g) || []).length;
+    const players = [];
+    let unnamed = 0;
+    for (let r = 0; r < n; r++) {
+      const names = blocks.map((bk) => bk.rows[r]?.name || "").filter(Boolean);
+      const name = names.sort((a, c) => hangul(c) - hangul(a) || c.length - a.length)[0] || `이름?${++unnamed}`;
+      const p = { name, front: null, back: null, total: null, holes: [], warnings: [] };
+      blocks.forEach((bk) => {
+        const row = bk.rows[r];
+        if (!row) { p.warnings.push(`${bk.off ? "후반" : "전반"} 줄을 찾지 못함`); return; }
+        // 합계로 못 가리면: 값 평균이 2.8 이상이면 타수, 아니면 +/-
+        const abs = row.mode ? row.mode === "abs" : row.holes.reduce((a, c) => a + c, 0) / 9 >= 2.8;
+        if (!row.mode) p.warnings.push(`${bk.off ? "후반" : "전반"} 합계 칸이 맞지 않음 — 숫자 확인 필요`);
+        row.holes.forEach((v, i) => p.holes.push({ h: bk.off + i + 1, st: abs ? v : bk.par[i] + v }));
+      });
+      if (name.startsWith("이름?")) p.warnings.push("이름을 읽지 못함 — 적어 주세요");
+      players.push(p);
+    }
+    return { pars, players };
+  }
+
   /* text → [{ name, front, back, total, holes, warnings }]
    * pars: { 홀번호: par } — 내 라운드의 Par. +/-로 적은 줄을 타수로 바꿀 때 쓴다.
    * opts.skipScore: 「Score」 줄은 내 것으로 보고 건너뛴다(스마트스코어 붙여넣기 등록 화면). */
   function parse(text, pars = {}, opts = {}) {
+    // HOLE·PAR·선수 줄 덩어리로 된 스코어카드(사진)는 덩어리 단위로 읽는다
+    const HB = holeBlocks(text);
+    if (HB && HB.players.length) return HB.players;
     // 표 형태면 먼저 한 줄 형태로 바꾸고, 표의 PAR는 내 라운드 Par가 없는 홀에만 쓴다
     const T = normalizeTable(text);
     text = T.text;
@@ -327,11 +405,12 @@ const Companions = (() => {
       const nums = stripTotals(splitMerged(m[2].match(/\d+/g) || [])).filter((v) => v >= 3 && v <= 6);
       parVals.push(...nums.slice(0, 18 - parVals.length));
     }
-    const pars = Object.fromEntries(parVals.map((v, i) => [i + 1, v]));
-    const players = parse(text, pars, { scoreName: "나" });
+    const HB = holeBlocks(text);
+    const pars = HB ? HB.pars : Object.fromEntries(parVals.map((v, i) => [i + 1, v]));
+    const players = HB ? HB.players : parse(text, pars, { scoreName: "나" });
     return { date, time, course, pars, players };
   }
 
-  return { parse, summary, shrink, ocr, cleanOcr, scanCard };
+  return { parse, summary, shrink, ocr, cleanOcr, scanCard, holeBlocks };
 })();
 if (typeof module !== "undefined") module.exports = Companions;
