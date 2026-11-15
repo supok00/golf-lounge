@@ -899,7 +899,7 @@
 
       <div class="card voicebar" id="voiceBar" style="margin-top:12px;padding:10px 12px">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          ${typeof Voice !== "undefined" && Voice.available ? `<button class="btn" id="vMic" type="button" style="min-width:120px">🎤 말로 입력</button>` : ""}
+          ${typeof Voice !== "undefined" && Voice.available ? `<button class="btn" id="vMic" type="button" style="min-width:120px">🎤 음성 입력</button>` : ""}
           <input id="vText" style="flex:1;min-width:180px" placeholder="예: 3번 홀 보기 투퍼트 페어웨이 안착 (키보드 🎤로 말해도 됨)" enterkeyhint="done">
           <button class="btn ghost" id="vGo" type="button">해석</button>
         </div>
@@ -1146,7 +1146,7 @@
     });
     $("bPrev").onclick = () => { cur = cur === 1 ? 18 : cur - 1; drawAll(); };
     $("bNext").onclick = () => { cur = cur === 18 ? 1 : cur + 1; drawAll(); };
-    /* 말로 입력(js/voice.js): 받아쓴 글 → 미리보기 → 「적용」. 홀 번호를 말하지 않으면 지금 홀 */
+    /* 음성 입력(js/voice.js): 받아쓴 글 → 미리보기 → 「적용」. 홀 번호를 말하지 않으면 지금 홀 */
     if (typeof Voice !== "undefined") {
       let vRec = null, vRes = null;
       const vOut = $("vOut");
@@ -1194,7 +1194,7 @@
       if ($("vMic")) $("vMic").onclick = async () => {
         if (vRec) { vRec.stop(); return; }
         $("vText").value = ""; vOut.innerHTML = "";
-        const btnDone = () => { vRec = null; if ($("vMic")) { $("vMic").classList.remove("danger"); $("vMic").textContent = "🎤 말로 입력"; $("vMic").disabled = false; } };
+        const btnDone = () => { vRec = null; if ($("vMic")) { $("vMic").classList.remove("danger"); $("vMic").textContent = "🎤 음성 입력"; $("vMic").disabled = false; } };
         const hint = (t) => { if ($("vOut") && !$("vApply")) vOut.innerHTML = `<div class="muted" style="margin-top:6px">${esc(t)}</div>`; };
         $("vMic").textContent = "■ 다 말했으면 누르기";
         $("vMic").classList.add("danger");
