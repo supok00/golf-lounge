@@ -212,7 +212,10 @@ def add_planned(sub, req):
     fh = tee_holes(front)
     src = fh if len(fh) == 18 else fh[:9] + [dict(h, h=h["h"] + 9) for h in tee_holes(back)[:9]]
     holes = [{k: h[k] for k in ("h", "par", "dist", "hcp") if h.get(k) is not None} for h in src]
-    rounds.append({"id": f"r{date.replace('-', '')}-plan", "date": date, "course": club["name"], "front": front, "back": back,
+    rid = f"r{date.replace('-', '')}-plan"
+    while any(r.get("id") == rid for r in rounds):   # 같은 날 다른 골프장 예정 라운드와 id가 겹치지 않게
+        rid += "2"
+    rounds.append({"id": rid, "date": date, "course": club["name"], "front": front, "back": back,
                    "tee": req["tee"], "region": club.get("region", ""), "memo": "", "planned": True, "holes": holes})
     save(ROUNDS, rounds)
     return f"{date} 예정 라운드 등록"
